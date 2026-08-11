@@ -2,6 +2,7 @@ import os
 import threading
 import asyncio
 import re
+import requests
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -11,18 +12,29 @@ web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Menu Bot is successfully running on Render!"
+    return "Advanced Group Bot is running on Render!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-# --- বটের মূল কোড ---
+# --- বটের মূল ভ্যারিয়েবল ---
 TOKEN = os.environ.get("BOT_TOKEN")
+JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
+CHANNEL_USERNAME = "@msmofworld" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
 ALLOWED_SITES = ["mytb.fun"]
+
+# JSON ডাটা আনার ফাংশন
+def get_json_data():
+    try:
+        response = requests.get(JSON_URL)
+        return response.json()
+    except Exception as e:
+        print("Error fetching JSON:", e)
+        return None
 
 def is_allowed_link(link: str) -> bool:
     link_lower = link.lower()
@@ -35,9 +47,43 @@ def is_allowed_link(link: str) -> bool:
             return True
     return False
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("হ্যালো! আমি গ্রুপের স্ক্যাম লিংক রিমুভ করি। আমার মেনু দেখতে চাইলে 'my go' বা 'mygo' লিখে মেসেজ দিন।")
+# --- ওয়েলকাম মেসেজ এবং চ্যানেল জয়েন চেক ---
+async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    for new_member in update.message.new_chat_members:
+        # বট জয়েন করলে তাকে মেসেজ দেবে না
+        if new_member.is_bot:
+            continue
+            
+        try:
+            # চেক করা ইউজার চ্যানেলে আছে কিনা
+            member_status = await context.bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=new_member.id)
+            if member_status.status in ['member', 'administrator', 'creator']:
+                # চ্যানেলে থাকলে শুধু ওয়েলকাম মেসেজ
+                await update.message.reply_text(f"স্বাগতম {new_member.first_name}! আমাদের গ্রুপে আপনাকে পেয়ে আমরা আনন্দিত। 🎉")
+            else:
+                # চ্যানেলে না থাকলে ওয়েলকাম মেসেজ + জয়েন বাটন
+                keyboard = [[InlineKeyboardButton("📢 আমাদের চ্যানেলে জয়েন করুন", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    f"স্বাগতম {new_member.first_name}! সব আপডেট পেতে দয়া করে আমাদের অফিশিয়াল চ্যানেলে জয়েন করুন।",
+                    reply_markup=reply_markup
+                )
+        except Exception as e:
+            print("Channel checking error:", e)
+            await update.message.reply_text(f"স্বাগতম {new_member.first_name}! 🎉")
 
+# --- ৫ মিনিট পর বাটন ডিলিট করার ফাংশন ---
+async def remove_button_job(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    chat_id = job.chat_id
+    message_id = job.data
+    try:
+        # বাটন রিমুভ করে দেওয়া
+        await context.bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+    except Exception as e:
+        pass # যদি ক্লিক করে আগেই বাটন রিমুভ করে দেয়, তবে এই এরর ইগনোর করবে
+
+# --- রেগুলার মেসেজ চেক ---
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     should_delete = False
@@ -46,7 +92,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text_to_check:
         return
 
-    # --- ১. গ্রুপের জন্য স্ক্যাম লিংক ও ফরওয়ার্ড চেক ---
+    # ১. স্ক্যাম লিংক ও ফরওয়ার্ড রিমুভ করা
     if message.chat.type in ['group', 'supergroup']:
         if message.forward_origin:
             should_delete = True
@@ -57,47 +103,54 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     should_delete = True
                     break
 
-    # ডিলিট করার কারণ থাকলে ডিলিট করবে
     if should_delete:
         try:
             await message.delete()
         except Exception as e:
-            print(f"Error deleting message: {e}")
+            print("Error deleting message:", e)
     else:
-        # --- ২. "mygo" বা "my go" চেক করে বাটন মেনু দেওয়া ---
+        # ২. "mygo" বা "my go" চেক করে JSON থেকে বাটন মেনু দেওয়া
         text_lower = text_to_check.lower()
         if "mygo" in text_lower or "my go" in text_lower:
-            # বাটনের লিস্ট তৈরি
-            keyboard = [
-                [InlineKeyboardButton("📺 MY TV সম্পর্কে জানুন", callback_data="about_mytv")],
-                [InlineKeyboardButton("🔗 লাইভ লিংক", callback_data="live_link")],
-                [InlineKeyboardButton("📞 অ্যাডমিনের সাথে যোগাযোগ", callback_data="contact_admin")]
-            ]
+            data = get_json_data()
+            if not data:
+                await message.reply_text("দুঃখিত, সার্ভার থেকে ডাটা আনা যাচ্ছে না।")
+                return
+            
+            menu_text = data.get("menu_text", "মেনু:")
+            buttons_data = data.get("buttons", [])
+            
+            # JSON এর বাটন দিয়ে কীবোর্ড তৈরি করা
+            keyboard = []
+            for btn in buttons_data:
+                keyboard.append([InlineKeyboardButton(btn["text"], callback_data=btn["callback_data"])])
+            
             reply_markup = InlineKeyboardMarkup(keyboard)
-            await message.reply_text(
-                "হ্যালো! আপনি MY TV সম্পর্কে কী জানতে চান? নিচের লিস্ট থেকে ক্লিক করুন:",
-                reply_markup=reply_markup
-            )
+            sent_msg = await message.reply_text(menu_text, reply_markup=reply_markup)
+            
+            # ৫ মিনিট (300 সেকেন্ড) পর বাটন রিমুভ করার টাইমার চালু করা
+            context.job_queue.run_once(remove_button_job, 300, chat_id=message.chat_id, data=sent_msg.message_id)
 
-# --- ৩. বাটনে ক্লিক করলে যে রিপ্লাই দেবে ---
+# --- বাটনে ক্লিক করার পর আনসার দেওয়া ---
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer() # টেলিগ্রামকে জানানো যে ক্লিক রিসিভ হয়েছে
+    await query.answer()
 
-    data = query.data
+    data_key = query.data
+    json_data = get_json_data()
     
-    # স্ক্রিপ্টে লেখা নির্দিষ্ট উত্তর
-    if data == "about_mytv":
-        text = "MY TV হলো একটি দারুণ এন্টারটেইনমেন্ট প্ল্যাটফর্ম। এখানে আপনি বিভিন্ন কনটেন্ট উপভোগ করতে পারবেন।"
-    elif data == "live_link":
-        text = "MY TV লাইভ দেখার লিংক: https://mytb.fun\nএছাড়াও আপনি আমাদের .m3u প্লেলিস্ট ব্যবহার করতে পারেন।"
-    elif data == "contact_admin":
-        text = "যেকোনো দরকারে বা সমস্যার জন্য আমাদের অ্যাডমিনের সাথে ইনবক্সে যোগাযোগ করুন।"
-    else:
-        text = "দুঃখিত, কোনো তথ্য পাওয়া যায়নি।"
+    reply_text = "দুঃখিত, তথ্য পাওয়া যায়নি।"
+    if json_data and "answers" in json_data:
+        reply_text = json_data["answers"].get(data_key, reply_text)
 
-    # উত্তরটি নতুন মেসেজ হিসেবে সেন্ড করবে
-    await query.message.reply_text(text)
+    # ক্লিক করার সাথে সাথে বাটনটি রিমুভ করে দেওয়া
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except:
+        pass
+        
+    # উত্তর পাঠানো
+    await query.message.reply_text(reply_text)
 
 def main():
     if not TOKEN:
@@ -111,12 +164,13 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
     
-    # হ্যান্ডলার যুক্ত করা
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, check_message))
-    app.add_handler(CallbackQueryHandler(button_click)) # বাটন ক্লিকের হ্যান্ডলার
+    # নতুন মেম্বার আসার হ্যান্ডলার
+    app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, welcome_new_member))
+    
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND & ~filters.StatusUpdate.NEW_CHAT_MEMBERS, check_message))
+    app.add_handler(CallbackQueryHandler(button_click))
 
-    print("বাটন মেনু বট চালু হয়েছে...")
+    print("অ্যাডভান্সড বট চালু হয়েছে...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
