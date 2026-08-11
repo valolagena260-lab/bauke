@@ -1,10 +1,11 @@
 import os
 import threading
+import asyncio
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- ডামি ওয়েব সার্ভার (Render-কে ফ্রি-তে চালানোর জন্য) ---
+# --- ডামি ওয়েব সার্ভার ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -12,7 +13,8 @@ def home():
     return "Bot is successfully running on Render!"
 
 def run_web():
-    port = int(os.environ.get("PORT", 8080))
+    # Render সাধারণত 10000 পোর্টে রান করে
+    port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
 # --- বটের মূল কোড ---
@@ -30,8 +32,12 @@ def main():
         print("Error: BOT_TOKEN পাওয়া যায়নি! Render-এ Environment Variable চেক করুন।")
         return
 
-    # ওয়েব সার্ভারটিকে আলাদাভাবে চালু করা
-    threading.Thread(target=run_web).start()
+    # ওয়েব সার্ভারটিকে ব্যাকগ্রাউন্ডে চালু করা
+    threading.Thread(target=run_web, daemon=True).start()
+
+    # --- এরর ফিক্স: নতুন Asyncio Event Loop তৈরি করা ---
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
     # বটের অ্যাপ্লিকেশন তৈরি
     app = Application.builder().token(TOKEN).build()
