@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MY TV - YC Earn & Withdraw</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; text-align: center; padding: 20px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 10px; max-width: 400px; margin: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+        button:disabled { background: #64748b; cursor: not-allowed; }
+        input { width: 80%; padding: 10px; margin-top: 10px; border-radius: 5px; border: 1px solid #ccc; }
+        #adblock-warning { color: #ef4444; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🎯 MY TV YC Task</h2>
+    <p>আজকের টাস্ক বাকি: <span id="tasks-left">10</span> / 10</p>
+    <p>আপনার ব্যালেন্স: <span id="balance">0.00</span> YC</p>
+    
+    <div id="adblock-warning">⚠️ দয়া করে অ্যাডব্লকার (AdBlocker) বন্ধ করুন! অ্যাডব্লকার অন থাকলে টাস্ক কাউন্ট হবে না।</div>
+    
+    <div id="task-box">
+        <p id="timer-text">টাস্ক দেখতে নিচের বাটনে ক্লিক করুন (১৫ সেকেন্ড অপেক্ষা করুন):</p>
+        <button id="task-btn" onclick="startTask()">বিজ্ঞাপন দেখুন (Task Start)</button>
+    </div>
+
+    <hr style="margin: 20px 0; border: 0.5px solid #334155;">
+
+    <h3>💳 উইথড্র (Withdraw)</h3>
+    <p>মিনিমাম ১০ YC হলে উইথড্র করতে পারবেন।</p>
+    <input type="text" id="wallet-id" placeholder="MY TV Wallet ID দিন">
+    <br>
+    <button onclick="requestWithdraw()">উইথড্র রিকোয়েস্ট পাঠান</button>
+</div>
+
+<script>
+    let balance = parseFloat(localStorage.getItem('yc_balance')) || 0.0;
+    let tasksLeft = parseInt(localStorage.getItem('tasks_left')) !== NaN ? parseInt(localStorage.getItem('tasks_left')) : 10;
+    
+    document.getElementById('balance').innerText = balance.toFixed(2);
+    document.getElementById('tasks-left').innerText = tasksLeft;
+
+    // অ্যাডব্লকার ডিটেক্ট করার ছোট্ট কোড
+    let ad = document.createElement('div');
+    ad.innerHTML = '&nbsp;';
+    ad.className = 'adsbox';
+    document.body.appendChild(ad);
+    window.setTimeout(function() {
+        if (ad.offsetHeight === 0) {
+            document.getElementById('adblock-warning').style.display = 'block';
+            document.getElementById('task-btn').disabled = true;
+        }
+        ad.remove();
+    }, 100);
+
+    function startTask() {
+        if (tasksLeft <= 0) {
+            alert("আজকের টাস্ক শেষ! কাল আবার চেষ্টা করুন।");
+            return;
+        }
+
+        let btn = document.getElementById('task-btn');
+        let timerText = document.getElementById('timer-text');
+        btn.disabled = true;
+
+        // অ্যাডস্টাররা ডাইরেক্ট লিংক বা পপকভার লিংক এখানে বসাবেন
+        let adWindow = window.open("https://your-adsterra-direct-link.com", "_blank");
+
+        let timeLeft = 15;
+        timerText.innerText = `বিজ্ঞাপন লোড হচ্ছে... ${timeLeft} সেকেন্ড বাকি`;
+
+        let countdown = setInterval(() => {
+            // যদি ইউজার অ্যাড উইন্ডো কেটে দেয় বা অ্যাড লোড না হয় তবে টাইম কাউন্ট থামানোর লজিক
+            if (adWindow && adWindow.closed) {
+                clearInterval(countdown);
+                timerText.innerText = "⚠️ আপনি বিজ্ঞাপন উইন্ডো বন্ধ করে দিয়েছেন! টাস্ক বাতিল।";
+                btn.disabled = false;
+                return;
+            }
+
+            timeLeft--;
+            timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
+
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+                if(adWindow) adWindow.close();
+                
+                // ব্যালেন্স ও টাস্ক আপডেট
+                balance += 0.10;
+                tasksLeft--;
+                
+                localStorage.setItem('yc_balance', balance.toFixed(2));
+                localStorage.setItem('tasks_left', tasksLeft);
+
+                document.getElementById('balance').innerText = balance.toFixed(2);
+                document.getElementById('tasks-left').innerText = tasksLeft;
+                
+                timerText.innerText = "🎉 অভিনন্দন! ০.১০ YC আপনার একাউন্টে যোগ হয়েছে।";
+                btn.disabled = false;
+            }
+        }, 1000);
+    }
+
+    function requestWithdraw() {
+        let walletId = document.getElementById('wallet-id').value.trim();
+        if (!walletId) {
+            alert("দয়া করে আপনার MY TV Wallet ID দিন!");
+            return;
+        }
+        if (balance < 10) {
+            alert("উইথড্র করার জন্য কমপক্ষে ১০ YC প্রয়োজন!");
+            return;
+        }
+
+        // ব্যাকএন্ডে রিকোয়েস্ট পাঠানো
+        fetch('/api/withdraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wallet_id: walletId, amount: balance, username: "TelegramUser", user_id: "12345" })
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert("সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
+            balance = 0;
+            localStorage.setItem('yc_balance', 0);
+            document.getElementById('balance').innerText = "0.00";
+        })
+        .catch(err => {
+            alert("সমস্যা হয়েছে, আবার চেষ্টা করুন।");
+        });
+    }
+</script>
+
+</body>
+</html>
