@@ -23,7 +23,7 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@msmofworld" 
+CHANNEL_USERNAME = "@msmwofworld" 
 ADMIN_CHAT_ID = 7477535984 
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
@@ -186,5 +186,5 @@ def main():
     print("বট এবং ওয়েব অ্যাপ সফলভাবে চালু হয়েছে...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
-if __name__ == "__main__":
+if __name__ ==- "__main__":
     main()
