@@ -3,17 +3,15 @@ import threading
 import asyncio
 import re
 from flask import Flask
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-from google import genai
-from google.genai import types
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 # --- ডামি ওয়েব সার্ভার ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "AI Bot is successfully running on Render!"
+    return "Menu Bot is successfully running on Render!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -21,12 +19,6 @@ def run_web():
 
 # --- বটের মূল কোড ---
 TOKEN = os.environ.get("BOT_TOKEN")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-# --- নতুন Gemini AI সেটআপ ---
-ai_client = None
-if GEMINI_API_KEY:
-    ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
@@ -44,7 +36,7 @@ def is_allowed_link(link: str) -> bool:
     return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("হ্যালো! আমি MY TV এর এআই (AI) অ্যাসিস্ট্যান্ট। আমাকে যেকোনো কিছু জিজ্ঞাসা করতে পারেন! 🚀")
+    await update.message.reply_text("হ্যালো! আমি গ্রুপের স্ক্যাম লিংক রিমুভ করি। আমার মেনু দেখতে চাইলে 'my go' বা 'mygo' লিখে মেসেজ দিন।")
 
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
@@ -72,22 +64,40 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Error deleting message: {e}")
     else:
-        # --- ২. AI দিয়ে অটো-রিপ্লাই ---
-        if ai_client:
-            await context.bot.send_chat_action(chat_id=message.chat_id, action='typing')
-            try:
-                # নতুন গুগলের সিস্টেমে উত্তর জেনারেট করা
-                response = await ai_client.aio.models.generate_content(
-                    model='gemini-1.5-flash',
-                    contents=text_to_check,
-                    config=types.GenerateContentConfig(
-                        system_instruction="তুমি হলে 'MY TV' এর একজন স্মার্ট অ্যাসিস্ট্যান্ট। তোমার কাজ হলো ইউজারদের সাহায্য করা। কেউ যেকোনো ভাষায় প্রশ্ন করলে তুমি নিজে থেকে বুঝে সুন্দর করে বাংলায় উত্তর দেবে।"
-                    )
-                )
-                await message.reply_text(response.text)
-            except Exception as e:
-                print(f"AI Error: {e}")
-                await message.reply_text("দুঃখিত, আমার সার্ভারে একটু সমস্যা হচ্ছে। একটু পর আবার চেষ্টা করুন।")
+        # --- ২. "mygo" বা "my go" চেক করে বাটন মেনু দেওয়া ---
+        text_lower = text_to_check.lower()
+        if "mygo" in text_lower or "my go" in text_lower:
+            # বাটনের লিস্ট তৈরি
+            keyboard = [
+                [InlineKeyboardButton("📺 MY TV সম্পর্কে জানুন", callback_data="about_mytv")],
+                [InlineKeyboardButton("🔗 লাইভ লিংক", callback_data="live_link")],
+                [InlineKeyboardButton("📞 অ্যাডমিনের সাথে যোগাযোগ", callback_data="contact_admin")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await message.reply_text(
+                "হ্যালো! আপনি MY TV সম্পর্কে কী জানতে চান? নিচের লিস্ট থেকে ক্লিক করুন:",
+                reply_markup=reply_markup
+            )
+
+# --- ৩. বাটনে ক্লিক করলে যে রিপ্লাই দেবে ---
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer() # টেলিগ্রামকে জানানো যে ক্লিক রিসিভ হয়েছে
+
+    data = query.data
+    
+    # স্ক্রিপ্টে লেখা নির্দিষ্ট উত্তর
+    if data == "about_mytv":
+        text = "MY TV হলো একটি দারুণ এন্টারটেইনমেন্ট প্ল্যাটফর্ম। এখানে আপনি বিভিন্ন কনটেন্ট উপভোগ করতে পারবেন।"
+    elif data == "live_link":
+        text = "MY TV লাইভ দেখার লিংক: https://mytb.fun\nএছাড়াও আপনি আমাদের .m3u প্লেলিস্ট ব্যবহার করতে পারেন।"
+    elif data == "contact_admin":
+        text = "যেকোনো দরকারে বা সমস্যার জন্য আমাদের অ্যাডমিনের সাথে ইনবক্সে যোগাযোগ করুন।"
+    else:
+        text = "দুঃখিত, কোনো তথ্য পাওয়া যায়নি।"
+
+    # উত্তরটি নতুন মেসেজ হিসেবে সেন্ড করবে
+    await query.message.reply_text(text)
 
 def main():
     if not TOKEN:
@@ -101,10 +111,12 @@ def main():
 
     app = Application.builder().token(TOKEN).build()
     
+    # হ্যান্ডলার যুক্ত করা
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, check_message))
+    app.add_handler(CallbackQueryHandler(button_click)) # বাটন ক্লিকের হ্যান্ডলার
 
-    print("AI অ্যাসিস্ট্যান্ট বট চালু হয়েছে...")
+    print("বাটন মেনু বট চালু হয়েছে...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
