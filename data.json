@@ -1,13 +1,13 @@
 {
-  "menu_text": "MY TV সম্পর্কে কী জানতে চান? নিচের অপশনগুলো থেকে ক্লিক করুন:",
+  "menu_text": "MY TV সম্পর্কে কী জানতে চান?\nনিচের অপশনগুলো থেকে আপনার প্রয়োজনীয়টি বেছে নিন 👇",
   "buttons": [
     {"text": "📺 MY TV সম্পর্কে জানুন", "callback_data": "about_mytv"},
     {"text": "🔗 লাইভ লিংক", "callback_data": "live_link"},
     {"text": "📞 অ্যাডমিনের সাথে যোগাযোগ", "callback_data": "contact_admin"}
   ],
   "answers": {
-    "about_mytv": "MY TV বিনোদনের সম্পূর্ণ ঠিকানা! Live TV, Live Event, OTT, Movies, Series, Reels ও K-Drama—সবকিছু এক প্ল্যাটফর্মে। ❤️📥 MY TV ডাউনলোড করুন: https://mytb.fun একবার ব্যবহার করলেই বুঝবেন—বিনোদন এখন আরও সহজ",
-    "live_link": "MY TV লাইভ দেখার লিংক: https://mytb.fun",
-    "contact_admin": "যেকোনো দরকারে আমাদের অ্যাডমিনের সাথে ইনবক্সে যোগাযোগ করুন।"
+    "about_mytv": "MY TV বিনোদনের সম্পূর্ণ ঠিকানা! ❤️\n\n📺 যা যা থাকছে:\n▪️ Live TV & Live Events\n▪️ OTT, Movies & Series\n▪️ Reels ও K-Drama\n\nসবকিছু এখন এক প্ল্যাটফর্মে!\n\n📥 MY TV ডাউনলোড করুন:\n👉 https://mytb.fun\n\nএকবার ব্যবহার করলেই বুঝবেন—বিনোদন এখন আরও সহজ! ✨",
+    "live_link": "🔴 MY TV লাইভ দেখার লিংক:\n👉 https://mytb.fun",
+    "contact_admin": "📞 যেকোনো দরকারে বা সহায়তার জন্য আমাদের অ্যাডমিনের সাথে ইনবক্সে যোগাযোগ করুন।"
   }
 }
