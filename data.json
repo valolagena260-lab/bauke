@@ -1,0 +1,8 @@
+{
+  "reply_1": {
+    "text": "এটি ফাইল থেকে আসা মেসেজ!",
+    "buttons": [
+      [{"text": "Click Me", "callback_data": "ans_1"}]
+    ]
+  }
+}
