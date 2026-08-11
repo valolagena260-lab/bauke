@@ -5,13 +5,14 @@ import re
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import google.generativeai as genai
 
 # --- ডামি ওয়েব সার্ভার ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return "Bot is successfully running on Render!"
+    return "AI Bot is successfully running on Render!"
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
@@ -19,18 +20,20 @@ def run_web():
 
 # --- বটের মূল কোড ---
 TOKEN = os.environ.get("BOT_TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+# --- Gemini AI সেটআপ ---
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    # বটকে তার দায়িত্ব বুঝিয়ে দেওয়া হচ্ছে
+    model = genai.GenerativeModel(
+        model_name="gemini-1.5-flash",
+        system_instruction="তুমি হলে 'MY TV' এর একজন স্মার্ট অ্যাসিস্ট্যান্ট। তোমার কাজ হলো ইউজারদের সাহায্য করা। কেউ যেকোনো ভাষায় (বাংলা, ইংরেজি বা বাংলিশ) প্রশ্ন করলে তুমি নিজে থেকে বুঝে সুন্দর করে বাংলায় উত্তর দেবে। তুমি বন্ধুসুলভ আচরণ করবে।"
+    )
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
-
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
 ALLOWED_SITES = ["mytb.fun"]
-
-# --- বটের পরিচয় জানতে চাওয়ার কিওয়ার্ড (বাংলা, বাংলিশ, ইংরেজি, হিন্দি ইত্যাদি) ---
-IDENTITY_KEYWORDS = [
-    "tumi ke", "তুমি কে", "who are you", "bot ke", "বট কে", "apni ke", "আপনি কে", 
-    "who is this", "tui ke", "tor nam ki", "your name", "name ki", "nam ki", "নাম কি", "নাম কী",
-    "tum kaun ho", "aap kaun hain", "introduce yourself", "porichoy", "পরিচয়", "porichoi"
-]
 
 def is_allowed_link(link: str) -> bool:
     link_lower = link.lower()
@@ -44,14 +47,14 @@ def is_allowed_link(link: str) -> bool:
     return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("হ্যালো! আমি MY TV এর অ্যাসিস্ট্যান্ট এবং গ্রুপের স্ক্যাম লিংক রিমুভ করতে প্রস্তুত। 🚀")
+    await update.message.reply_text("হ্যালো! আমি MY TV এর এআই (AI) অ্যাসিস্ট্যান্ট। আমাকে যেকোনো কিছু জিজ্ঞাসা করতে পারেন! 🚀")
 
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     should_delete = False
     text_to_check = message.text or message.caption or ""
 
-    # --- ১. স্ক্যাম লিংক ও ফরওয়ার্ড চেক (শুধুমাত্র গ্রুপের জন্য) ---
+    # --- ১. গ্রুপের জন্য স্ক্যাম লিংক ও ফরওয়ার্ড চেক ---
     if message.chat.type in ['group', 'supergroup']:
         if message.forward_origin:
             should_delete = True
@@ -69,17 +72,24 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Error deleting message: {e}")
     else:
-        # --- ২. অটো-রিপ্লাই চেক (গ্রুপ এবং ইনবক্স/প্রাইভেট চ্যাট সব জায়গার জন্য) ---
-        if text_to_check:
-            text_lower = text_to_check.lower()
-            
-            # যদি কিওয়ার্ডগুলোর কোনো একটি মেসেজের মধ্যে থাকে
-            if any(keyword in text_lower for keyword in IDENTITY_KEYWORDS):
-                await message.reply_text("আমি MY TV এর অ্যাসিস্ট্যান্ট। MY TV সম্পর্কে কিছু জানতে চাইলে আমাকে জিজ্ঞাসা করতে পারেন।")
+        # --- ২. AI দিয়ে অটো-রিপ্লাই (যেকোনো ভাষায়) ---
+        if text_to_check and GEMINI_API_KEY:
+            # বটকে টাইপিং স্টেটে দেখানোর জন্য
+            await context.bot.send_chat_action(chat_id=message.chat_id, action='typing')
+            try:
+                # এআই থেকে উত্তর জেনারেট করা
+                response = await model.generate_content_async(text_to_check)
+                await message.reply_text(response.text)
+            except Exception as e:
+                print(f"AI Error: {e}")
+                await message.reply_text("দুঃখিত, আমার সার্ভারে একটু সমস্যা হচ্ছে। একটু পর আবার চেষ্টা করুন।")
 
 def main():
     if not TOKEN:
-        print("Error: BOT_TOKEN পাওয়া যায়নি! Render-এ Environment Variable চেক করুন।")
+        print("Error: BOT_TOKEN পাওয়া যায়নি!")
+        return
+    if not GEMINI_API_KEY:
+        print("Error: GEMINI_API_KEY পাওয়া যায়নি! এআই কাজ করবে না।")
         return
 
     threading.Thread(target=run_web, daemon=True).start()
@@ -92,7 +102,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, check_message))
 
-    print("অ্যান্টি-লিংক এবং অটো-রিপ্লাই বট চালু হয়েছে...")
+    print("AI অ্যাসিস্ট্যান্ট বট চালু হয়েছে...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
