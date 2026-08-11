@@ -4,10 +4,9 @@ import asyncio
 import re
 import requests
 from flask import Flask, render_template, request, jsonify
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# --- ফ্লাস্ক ওয়েব সার্ভার ---
 web_app = Flask(__name__)
 
 @web_app.route('/')
@@ -16,18 +15,16 @@ def home():
 
 @web_app.route('/earn')
 def earn_page():
-    # Render-এর ওয়েব পেজ যা টেলিগ্রাম থেকে ওপেন হবে
     return render_template('earn.html')
 
 def run_web():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-# --- বটের মূল ভ্যারিয়েবল ---
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@msmofworld" # আপনার চ্যানেলের ইউজারনেম
-ADMIN_CHAT_ID = 7477535984 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি দেবেন
+CHANNEL_USERNAME = "@msmofworld" 
+ADMIN_CHAT_ID = 7477535984 
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
@@ -53,7 +50,6 @@ def is_allowed_link(link: str) -> bool:
             return True
     return False
 
-# --- ওয়েলকাম মেসেজ (বট চ্যানেল অ্যাডমিন থাকলে সরাসরি চেক করতে পারবে) ---
 async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for new_member in update.message.new_chat_members:
         if new_member.is_bot:
@@ -73,7 +69,6 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception as e:
             print("Error:", e)
 
-# --- মেসেজ ও কমান্ড হ্যান্ডলার ---
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message or not message.text:
@@ -82,7 +77,6 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_lower = message.text.lower()
     chat_type = message.chat.type
 
-    # ১. স্ক্যাম লিংক চেক (গ্রুপে)
     if chat_type in ['group', 'supergroup']:
         if message.forward_origin:
             await message.delete()
@@ -93,14 +87,12 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await message.delete()
                 return
 
-    # ২. Earn YC কমান্ড
     if any(k in text_lower for k in EARN_KEYWORDS):
         web_app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'my-free-agent.onrender.com')}/earn"
-        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং করতে এখানে ক্লিক করুন", url=web_app_url)]]
-        await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন ১০টি টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", web_app=WebAppInfo(url=web_app_url))]]
+        await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
-    # ৩. MY Recharge নিয়ম
     if any(k in text_lower for k in RECHARGE_KEYWORDS):
         recharge_text = (
             "💎 *MY TV-তে YC রিচার্জ করার নিয়ম*\n\n"
@@ -112,7 +104,6 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(recharge_text, parse_mode='Markdown')
         return
 
-    # ৪. Menu (my go)
     if "mygo" in text_lower or "my go" in text_lower:
         data = get_json_data()
         if data:
@@ -120,7 +111,6 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent_msg = await message.reply_text(data.get("menu_text", "মেনু:"), reply_markup=InlineKeyboardMarkup(keyboard))
             context.job_queue.run_once(lambda ctx: ctx.bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=sent_msg.message_id, reply_markup=None), 300)
 
-# --- বাটন এবং উইথড্র রিকোয়েস্ট অ্যাডমিন এপ্রুভাল ---
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -141,17 +131,14 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("চেক করা সম্ভব হয়নি।", show_alert=True)
         return
 
-    # অ্যাডমিন উইথড্র অ্যাপ্রুভ করলে
     if data.startswith("approve_withdraw_"):
         parts = data.split("_")
         user_id = parts[2]
         amount = parts[3]
+        username = parts[4] if len(parts) > 4 else "User"
         
         await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
-        await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড (AMT: {amount} YC, User ID: {user_id})")
-        
-        # ইউজারকে গ্রুপে ট্যাগ করে মেসেজ পাঠানোর জন্য অ্যাডমিনের চ্যাট থেকে গ্রুপ আইডি লাগবে
-        # এখানে আমরা একটি নোটিফিকেশন পাঠাচ্ছি
+        await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড (AMT: {amount} YC, User: @{username})")
         return
 
     await query.answer()
@@ -164,7 +151,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await query.message.reply_text(json_data["answers"].get(data_key, "তথ্য নেই।"))
 
-# --- ওয়েব পেজ থেকে উইথড্র রিকোয়েস্ট রিসিভ করার API ---
 @web_app.route('/api/withdraw', methods=['POST'])
 def api_withdraw():
     req_data = request.json
@@ -173,10 +159,8 @@ def api_withdraw():
     telegram_user = req_data.get('username', 'Unknown')
     user_id = req_data.get('user_id', '0')
 
-    # অ্যাডমিনের কাছে টেলিগ্রামে উইথড্র মেসেজ পাঠানো
     if ADMIN_CHAT_ID:
-        keyboard = [[InlineKeyboardButton("✅ Approve", callback_data=f"approve_withdraw_{user_id}_{amount}")]]
-        # রিমোট বটের মাধ্যমে অ্যাডমিনকে পাঠানো লজিক (বা অ্যাপ্লিকেশনের ভেতর থেকে)
+        keyboard = [[InlineKeyboardButton("✅ Approve", callback_data=f"approve_withdraw_{user_id}_{amount}_{telegram_user}")]]
         requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={
             "chat_id": ADMIN_CHAT_ID,
             "text": f"🔔 নতুন উইথড্র রিকোয়েস্ট!\n\n👤 ইউজার: @{telegram_user}\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
@@ -184,7 +168,7 @@ def api_withdraw():
             "reply_markup": {"inline_keyboard": keyboard}
         })
 
-    return jsonify({"status": "success", "message": "Withdraw request sent to admin!"})
+    return jsonify({"status": "success", "message": "Withdraw request sent!"})
 
 def main():
     if not TOKEN:
