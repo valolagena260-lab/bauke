@@ -5,7 +5,8 @@ import re
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # --- ডামি ওয়েব সার্ভার ---
 web_app = Flask(__name__)
@@ -22,14 +23,10 @@ def run_web():
 TOKEN = os.environ.get("BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# --- Gemini AI সেটআপ ---
+# --- নতুন Gemini AI সেটআপ ---
+ai_client = None
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    # বটকে তার দায়িত্ব বুঝিয়ে দেওয়া হচ্ছে
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction="তুমি হলে 'MY TV' এর একজন স্মার্ট অ্যাসিস্ট্যান্ট। তোমার কাজ হলো ইউজারদের সাহায্য করা। কেউ যেকোনো ভাষায় (বাংলা, ইংরেজি বা বাংলিশ) প্রশ্ন করলে তুমি নিজে থেকে বুঝে সুন্দর করে বাংলায় উত্তর দেবে। তুমি বন্ধুসুলভ আচরণ করবে।"
-    )
+    ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
@@ -54,11 +51,14 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     should_delete = False
     text_to_check = message.text or message.caption or ""
 
+    if not text_to_check:
+        return
+
     # --- ১. গ্রুপের জন্য স্ক্যাম লিংক ও ফরওয়ার্ড চেক ---
     if message.chat.type in ['group', 'supergroup']:
         if message.forward_origin:
             should_delete = True
-        elif text_to_check:
+        else:
             links = re.findall(LINK_REGEX, text_to_check)
             for link in links:
                 if not is_allowed_link(link):
@@ -72,13 +72,18 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Error deleting message: {e}")
     else:
-        # --- ২. AI দিয়ে অটো-রিপ্লাই (যেকোনো ভাষায়) ---
-        if text_to_check and GEMINI_API_KEY:
-            # বটকে টাইপিং স্টেটে দেখানোর জন্য
+        # --- ২. AI দিয়ে অটো-রিপ্লাই ---
+        if ai_client:
             await context.bot.send_chat_action(chat_id=message.chat_id, action='typing')
             try:
-                # এআই থেকে উত্তর জেনারেট করা
-                response = await model.generate_content_async(text_to_check)
+                # নতুন গুগলের সিস্টেমে উত্তর জেনারেট করা
+                response = await ai_client.aio.models.generate_content(
+                    model='gemini-1.5-flash',
+                    contents=text_to_check,
+                    config=types.GenerateContentConfig(
+                        system_instruction="তুমি হলে 'MY TV' এর একজন স্মার্ট অ্যাসিস্ট্যান্ট। তোমার কাজ হলো ইউজারদের সাহায্য করা। কেউ যেকোনো ভাষায় প্রশ্ন করলে তুমি নিজে থেকে বুঝে সুন্দর করে বাংলায় উত্তর দেবে।"
+                    )
+                )
                 await message.reply_text(response.text)
             except Exception as e:
                 print(f"AI Error: {e}")
@@ -88,10 +93,7 @@ def main():
     if not TOKEN:
         print("Error: BOT_TOKEN পাওয়া যায়নি!")
         return
-    if not GEMINI_API_KEY:
-        print("Error: GEMINI_API_KEY পাওয়া যায়নি! এআই কাজ করবে না।")
-        return
-
+    
     threading.Thread(target=run_web, daemon=True).start()
 
     loop = asyncio.new_event_loop()
