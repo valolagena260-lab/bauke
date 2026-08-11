@@ -23,10 +23,7 @@
             padding: 15px; 
             margin: 0; 
         }
-        .container {
-            max-width: 420px;
-            margin: auto;
-        }
+        .container { max-width: 420px; margin: auto; }
         .card { 
             background: var(--card-bg); 
             padding: 24px; 
@@ -58,11 +55,10 @@
             border-radius: 8px; 
             cursor: pointer; 
             width: 100%; 
-            transition: background 0.2s, transform 0.1s;
+            transition: background 0.2s;
         }
         button:hover { background: var(--primary-hover); }
-        button:active { transform: scale(0.98); }
-        button:disabled { background: #475569; cursor: not-allowed; transform: none; }
+        button:disabled { background: #475569; cursor: not-allowed; }
         
         input { 
             width: 100%; 
@@ -75,7 +71,6 @@
             box-sizing: border-box;
             font-size: 15px;
         }
-        input:focus { outline: none; border-color: var(--primary); }
         
         #adblock-warning { 
             background: rgba(239, 68, 68, 0.1);
@@ -89,6 +84,27 @@
         }
         #timer-text { font-size: 14px; color: var(--text-muted); margin-top: 12px; min-height: 20px; }
         .divider { margin: 20px 0; border: 0; height: 1px; background: #334155; }
+
+        /* পপআপ মোডাল ডিজাইন */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; top: 0; 
+            width: 100%; height: 100%; 
+            background-color: rgba(0,0,0,0.8); 
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: #1e293b;
+            padding: 25px;
+            border-radius: 12px;
+            width: 85%;
+            max-width: 320px;
+            border: 1px solid #475569;
+            text-align: center;
+        }
+        .modal-content p { font-size: 15px; margin-bottom: 20px; color: #e2e8f0; }
     </style>
 </head>
 <body>
@@ -111,7 +127,7 @@
         <div id="adblock-warning">⚠️ অ্যাডব্লকার অন করা আছে! দয়া করে অ্যাডব্লকার বন্ধ করুন।</div>
         
         <div id="task-box">
-            <button id="task-btn" onclick="startTask()">বিজ্ঞাপন দেখুন (Task Start)</button>
+            <button id="task-btn" onclick="openAdModal()">বিজ্ঞাপন দেখুন (Task Start)</button>
             <p id="timer-text">১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন</p>
         </div>
 
@@ -124,6 +140,15 @@
     </div>
 </div>
 
+<!-- কাস্টম পপআপ মোডাল -->
+<div id="adModal" class="modal">
+    <div class="modal-content">
+        <p>বিজ্ঞাপন লিংক প্রস্তুত! নিচের বাটনে ক্লিক করে বিজ্ঞাপনটি ওপেন করুন এবং ১৫ সেকেন্ড অপেক্ষা করুন।</p>
+        <button style="background: var(--success);" onclick="startTimerAndOpenAd()">বিজ্ঞাপন ওপেন করুন</button>
+        <button style="background: #64748b; margin-top: 10px;" onclick="closeModal()">বাতিল</button>
+    </div>
+</div>
+
 <script>
     let balance = parseFloat(localStorage.getItem('yc_balance')) || 0.0;
     let tasksLeft = localStorage.getItem('tasks_left') !== null ? parseInt(localStorage.getItem('tasks_left')) : 10;
@@ -131,7 +156,6 @@
     document.getElementById('balance').innerText = balance.toFixed(2);
     document.getElementById('tasks-left').innerText = tasksLeft;
 
-    // অ্যাডব্লকার ডিটেক্ট
     let ad = document.createElement('div');
     ad.innerHTML = '&nbsp;';
     ad.className = 'adsbox';
@@ -147,14 +171,21 @@
     let countdown = null;
     let timeLeft = 15;
     let isTaskRunning = false;
-    let adWindow = null;
 
-    function startTask() {
+    function openAdModal() {
         if (tasksLeft <= 0) {
             alert("আজকের টাস্ক শেষ! কাল আবার চেষ্টা করুন।");
             return;
         }
+        document.getElementById('adModal').style.display = 'flex';
+    }
 
+    function closeModal() {
+        document.getElementById('adModal').style.display = 'none';
+    }
+
+    function startTimerAndOpenAd() {
+        closeModal();
         let btn = document.getElementById('task-btn');
         let timerText = document.getElementById('timer-text');
         btn.disabled = true;
@@ -162,28 +193,18 @@
 
         // আপনার অ্যাডস্টাররা ডাইরেক্ট বা পপওভার লিংক এখানে দিন
         let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; 
-        adWindow = window.open(adUrl, "_blank");
+        window.open(adUrl, "_blank");
 
         timeLeft = 15;
-        timerText.innerText = `বিজ্ঞাপন লোড হচ্ছে... ${timeLeft} সেকেন্ড বাকি`;
+        timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
 
         countdown = setInterval(() => {
-            // যদি ইউজার অ্যাড উইন্ডো কেটে দেয়
-            if (adWindow && adWindow.closed) {
-                clearInterval(countdown);
-                isTaskRunning = false;
-                timerText.innerText = "⚠️ আপনি বিজ্ঞাপন উইন্ডো বন্ধ করে দিয়েছেন! টাস্ক বাতিল।";
-                btn.disabled = false;
-                return;
-            }
-
             timeLeft--;
             timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
 
             if (timeLeft <= 0) {
                 clearInterval(countdown);
                 isTaskRunning = false;
-                if(adWindow) adWindow.close();
                 
                 balance += 0.10;
                 tasksLeft--;
@@ -200,32 +221,21 @@
         }, 1000);
     }
 
-    // অ্যান্টি-চিট: ইউজার অন্য ট্যাবে বা স্ক্রিনে চলে গেলে কাউন্টডাউন পজ হবে
+    // ইউজার অন্য ট্যাবে গেলে টাইম পজ হবে, তবে বেশিক্ষণ বাইরে থাকলেও টাস্ক বাতিল হবে না (ফ্রি টাইমার)
     document.addEventListener("visibilitychange", function() {
         if (document.hidden && isTaskRunning) {
             clearInterval(countdown);
-            let timerText = document.getElementById('timer-text');
-            timerText.innerText = "⏸️ আপনি অন্য স্ক্রিনে চলে গেছেন! কাউন্টডাউন থেমে গেছে। ফিরে আসুন।";
+            document.getElementById('timer-text').innerText = "⏸️ আপনি অন্য স্ক্রিনে গেছেন! কাউন্টডাউন পজ করা হয়েছে।";
         } else if (!document.hidden && isTaskRunning && timeLeft > 0) {
-            let timerText = document.getElementById('timer-text');
-            timerText.innerText = `▶️ আবার শুরু হয়েছে... ${timeLeft} সেকেন্ড বাকি`;
+            document.getElementById('timer-text').innerText = `▶️ আবার শুরু হলো... ${timeLeft} সেকেন্ড বাকি`;
             
             countdown = setInterval(() => {
-                if (adWindow && adWindow.closed) {
-                    clearInterval(countdown);
-                    isTaskRunning = false;
-                    timerText.innerText = "⚠️ বিজ্ঞাপন উইন্ডো বন্ধ করা হয়েছে! টাস্ক বাতিল।";
-                    document.getElementById('task-btn').disabled = false;
-                    return;
-                }
-
                 timeLeft--;
-                timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
+                document.getElementById('timer-text').innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
 
                 if (timeLeft <= 0) {
                     clearInterval(countdown);
                     isTaskRunning = false;
-                    if(adWindow) adWindow.close();
                     
                     balance += 0.10;
                     tasksLeft--;
@@ -236,7 +246,7 @@
                     document.getElementById('balance').innerText = balance.toFixed(2);
                     document.getElementById('tasks-left').innerText = tasksLeft;
                     
-                    timerText.innerText = "🎉 অভিনন্দন! ০.১০ YC আপনার একাউন্টে যোগ হয়েছে।";
+                    document.getElementById('timer-text').innerText = "🎉 অভিনন্দন! ০.১০ YC আপনার একাউন্টে যোগ হয়েছে।";
                     document.getElementById('task-btn').disabled = false;
                 }
             }, 1000);
