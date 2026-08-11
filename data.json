@@ -6,7 +6,14 @@
     {"text": "📞 অ্যাডমিনের সাথে যোগাযোগ", "callback_data": "contact_admin"}
   ],
   "answers": {
-    "about_mytv": "MY TV হলো একটি দারুণ এন্টারটেইনমেন্ট প্ল্যাটফর্ম।",
+    "about_mytv": "MY TV — বিনোদনের সম্পূর্ণ ঠিকানা!
+
+Live TV, Live Event, OTT, Movies, Series, Reels ও K-Drama—সবকিছু এক প্ল্যাটফর্মে। ❤️
+
+📥 MY TV ডাউনলোড করুন:
+🌐 https://mytb.fun
+
+একবার ব্যবহার করলেই বুঝবেন—বিনোদন এখন আরও সহজ! ✨",
     "live_link": "MY TV লাইভ দেখার লিংক: https://mytb.fun",
     "contact_admin": "যেকোনো দরকারে আমাদের অ্যাডমিনের সাথে ইনবক্সে যোগাযোগ করুন।"
   }
