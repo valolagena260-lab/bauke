@@ -14,6 +14,7 @@
             --text-main: #f8fafc;
             --text-muted: #94a3b8;
             --danger: #ef4444;
+            --warning: #f59e0b;
         }
         body { 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
@@ -82,7 +83,7 @@
             display: none; 
             margin-bottom: 15px; 
         }
-        #timer-text { font-size: 14px; color: var(--text-muted); margin-top: 12px; min-height: 20px; }
+        #timer-text { font-size: 14px; color: var(--warning); margin-top: 12px; min-height: 40px; font-weight: 500;}
         .divider { margin: 20px 0; border: 0; height: 1px; background: #334155; }
 
         /* পপআপ মোডাল ডিজাইন */
@@ -143,7 +144,7 @@
 <!-- কাস্টম পপআপ মোডাল -->
 <div id="adModal" class="modal">
     <div class="modal-content">
-        <p>বিজ্ঞাপন লিংক প্রস্তুত! নিচের বাটনে ক্লিক করে বিজ্ঞাপনটি ওপেন করুন এবং ১৫ সেকেন্ড অপেক্ষা করুন।</p>
+        <p>বিজ্ঞাপনটি নতুন ট্যাবে ওপেন হবে। দয়া করে <b>বিজ্ঞাপনের পেজে ১৫ সেকেন্ড অপেক্ষা করুন</b>। আগে ফিরে আসলে টাস্ক বাতিল হবে!</p>
         <button style="background: var(--success);" onclick="startTimerAndOpenAd()">বিজ্ঞাপন ওপেন করুন</button>
         <button style="background: #64748b; margin-top: 10px;" onclick="closeModal()">বাতিল</button>
     </div>
@@ -168,9 +169,9 @@
         ad.remove();
     }, 100);
 
-    let countdown = null;
-    let timeLeft = 15;
-    let isTaskRunning = false;
+    let adStartTime = 0;
+    let waitingForUserReturn = false;
+    const REQUIRED_TIME_SECONDS = 15;
 
     function openAdModal() {
         if (tasksLeft <= 0) {
@@ -188,24 +189,36 @@
         closeModal();
         let btn = document.getElementById('task-btn');
         let timerText = document.getElementById('timer-text');
+        
         btn.disabled = true;
-        isTaskRunning = true;
+        
+        // আপনার অ্যাডস্টাররা ডাইরেক্ট লিংক এখানে দিন
+        let adUrl = "https://your-adsterra-direct-link.com"; 
+        
+        // বর্তমান সময় সেভ করে রাখা হচ্ছে
+        adStartTime = Date.now();
+        waitingForUserReturn = true;
+        
+        timerText.style.color = "var(--warning)";
+        timerText.innerText = "⏳ আপনি এখন বিজ্ঞাপনের পেজে আছেন। দয়া করে সেখানে ১৫ সেকেন্ড অপেক্ষা করুন। আগে ফিরে আসলে টাস্ক বাতিল হবে!";
 
-        // আপনার অ্যাডস্টাররা ডাইরেক্ট বা পপওভার লিংক এখানে দিন
-        let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; 
+        // বিজ্ঞাপন ওপেন করা
         window.open(adUrl, "_blank");
+    }
 
-        timeLeft = 15;
-        timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
+    // ইউজার যখন আগের পেজে (মিনি অ্যাপে) ফিরে আসবে, তখন এটি ট্রিগার হবে
+    function handleVisibilityChange() {
+        if (document.visibilityState === 'visible' && waitingForUserReturn) {
+            let timerText = document.getElementById('timer-text');
+            let btn = document.getElementById('task-btn');
+            
+            // কতক্ষণ বাইরে ছিল তা হিসাব করা হচ্ছে
+            let timeSpentAway = (Date.now() - adStartTime) / 1000;
+            
+            waitingForUserReturn = false; // চেক করা শেষ
 
-        countdown = setInterval(() => {
-            timeLeft--;
-            timerText.innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
-
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
-                isTaskRunning = false;
-                
+            if (timeSpentAway >= REQUIRED_TIME_SECONDS) {
+                // ইউজার সততার সাথে ১৫ সেকেন্ড পার করেছে
                 balance += 0.10;
                 tasksLeft--;
                 
@@ -215,43 +228,22 @@
                 document.getElementById('balance').innerText = balance.toFixed(2);
                 document.getElementById('tasks-left').innerText = tasksLeft;
                 
-                timerText.innerText = "🎉 অভিনন্দন! ০.১০ YC আপনার একাউন্টে যোগ হয়েছে।";
-                btn.disabled = false;
+                timerText.style.color = "var(--success)";
+                timerText.innerText = `🎉 অভিনন্দন! আপনি সফলভাবে বিজ্ঞাপন দেখেছেন। ০.১০ YC যোগ হয়েছে।`;
+            } else {
+                // ইউজার চিটিং করেছে (আগে ফিরে এসেছে)
+                let timeMissed = Math.ceil(REQUIRED_TIME_SECONDS - timeSpentAway);
+                timerText.style.color = "var(--danger)";
+                timerText.innerText = `⚠️ টাস্ক বাতিল! আপনি ${timeMissed} সেকেন্ড আগেই ফিরে এসেছেন। আপনাকে বিজ্ঞাপনের পেজে পুরো ১৫ সেকেন্ড থাকতে হবে।`;
             }
-        }, 1000);
+            
+            btn.disabled = false;
+        }
     }
 
-    // ইউজার অন্য ট্যাবে গেলে টাইম পজ হবে, তবে বেশিক্ষণ বাইরে থাকলেও টাস্ক বাতিল হবে না (ফ্রি টাইমার)
-    document.addEventListener("visibilitychange", function() {
-        if (document.hidden && isTaskRunning) {
-            clearInterval(countdown);
-            document.getElementById('timer-text').innerText = "⏸️ আপনি অন্য স্ক্রিনে গেছেন! কাউন্টডাউন পজ করা হয়েছে।";
-        } else if (!document.hidden && isTaskRunning && timeLeft > 0) {
-            document.getElementById('timer-text').innerText = `▶️ আবার শুরু হলো... ${timeLeft} সেকেন্ড বাকি`;
-            
-            countdown = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer-text').innerText = `দয়া করে অপেক্ষা করুন... ${timeLeft} সেকেন্ড`;
-
-                if (timeLeft <= 0) {
-                    clearInterval(countdown);
-                    isTaskRunning = false;
-                    
-                    balance += 0.10;
-                    tasksLeft--;
-                    
-                    localStorage.setItem('yc_balance', balance.toFixed(2));
-                    localStorage.setItem('tasks_left', tasksLeft);
-
-                    document.getElementById('balance').innerText = balance.toFixed(2);
-                    document.getElementById('tasks-left').innerText = tasksLeft;
-                    
-                    document.getElementById('timer-text').innerText = "🎉 অভিনন্দন! ০.১০ YC আপনার একাউন্টে যোগ হয়েছে।";
-                    document.getElementById('task-btn').disabled = false;
-                }
-            }, 1000);
-        }
-    });
+    // ব্রাউজারের ফোকাস বা ভিজিবিলিটি চেঞ্জ ধরবে
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
 
     function requestWithdraw() {
         let walletId = document.getElementById('wallet-id').value.trim();
@@ -278,6 +270,8 @@
             document.getElementById('balance').innerText = "0.00";
             document.getElementById('tasks-left').innerText = "10";
             document.getElementById('wallet-id').value = "";
+            document.getElementById('timer-text').innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
+            document.getElementById('timer-text').style.color = "var(--text-muted)";
         })
         .catch(err => {
             alert("সমস্যা হয়েছে, আবার চেষ্টা করুন।");
