@@ -6,6 +6,7 @@ import requests
 from flask import Flask, render_template, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram.constants import MessageEntityType
 
 web_app = Flask(__name__)
 
@@ -23,12 +24,20 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@msmofworld" 
-ADMIN_CHAT_ID = 7477535984 
+CHANNEL_USERNAME = "@your_channel_username" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন
+ADMIN_CHAT_ID = 123456789 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
 ALLOWED_SITES = ["mytb.fun"]
+
+# স্ক্যাম এবং 18+ মেসেজ ধরার জন্য কিওয়ার্ড লিস্ট
+SPAM_KEYWORDS = [
+    "caught on tape", "cheated on husband", "leaked", "vip vault", 
+    "uncensored", "hot video", "private tape", "private link", 
+    "play video", "open private", "secret vault", "18+"
+]
+
 RECHARGE_KEYWORDS = ["my recharge", "add yc", "myrecharge", "addyc"]
 EARN_KEYWORDS = ["earn yc", "earnyc"]
 
@@ -40,6 +49,8 @@ def get_json_data():
         return None
 
 def is_allowed_link(link: str) -> bool:
+    if not link:
+        return False
     link_lower = link.lower()
     base_link = link_lower.split("?")[0]
     for ext in ALLOWED_EXTENSIONS:
@@ -71,28 +82,66 @@ async def welcome_new_member(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
-    if not message or not message.text:
+    if not message:
         return
 
-    text_lower = message.text.lower()
+    text_to_check = message.text or message.caption or ""
+    text_lower = text_to_check.lower()
     chat_type = message.chat.type
 
+    # --- ১. অ্যান্টি-স্ক্যাম এবং অ্যান্টি-লিংক সিস্টেম ---
     if chat_type in ['group', 'supergroup']:
+        should_delete = False
+        
+        # ক. ফরওয়ার্ড করা মেসেজ চেক
         if message.forward_origin:
-            await message.delete()
-            return
-        links = re.findall(LINK_REGEX, message.text)
-        for link in links:
-            if not is_allowed_link(link):
-                await message.delete()
-                return
+            should_delete = True
+            
+        # খ. স্ক্যাম কিওয়ার্ড চেক (যেমন: leaked, uncensored)
+        if any(spam_word in text_lower for spam_word in SPAM_KEYWORDS):
+            should_delete = True
 
+        # গ. হিডেন লিংক (Text Links) এবং সাধারণ লিংক চেক
+        if not should_delete:
+            urls_to_check = []
+            
+            # Entities থেকে লিংক বের করা (Hyperlinks)
+            entities = message.entities or message.caption_entities or []
+            for entity in entities:
+                if entity.type == MessageEntityType.TEXT_LINK:
+                    urls_to_check.append(entity.url)
+                elif entity.type == MessageEntityType.URL:
+                    if message.text:
+                        urls_to_check.append(message.text[entity.offset:entity.offset + entity.length])
+                    elif message.caption:
+                        urls_to_check.append(message.caption[entity.offset:entity.offset + entity.length])
+
+            # রেগুলার এক্সপ্রেশন দিয়ে সাধারণ লিংক বের করা
+            raw_links = re.findall(LINK_REGEX, text_to_check)
+            urls_to_check.extend(raw_links)
+
+            # সব লিংক যাচাই করা
+            for link in urls_to_check:
+                if not is_allowed_link(link):
+                    should_delete = True
+                    break
+
+        if should_delete:
+            try:
+                await message.delete()
+                # চাইলে স্ক্যামারকে কিক/ব্যান করার কোডও এখানে দেওয়া যায়
+            except Exception as e:
+                print("Delete Failed:", e)
+            return
+
+    # --- ২. Earn YC কমান্ড ---
     if any(k in text_lower for k in EARN_KEYWORDS):
         web_app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'my-free-agent.onrender.com')}/earn"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", web_app=WebAppInfo(url=web_app_url))]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
+    # --- ৩. MY Recharge নিয়ম ---
     if any(k in text_lower for k in RECHARGE_KEYWORDS):
         recharge_text = (
             "💎 *MY TV-তে YC রিচার্জ করার নিয়ম*\n\n"
@@ -104,6 +153,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(recharge_text, parse_mode='Markdown')
         return
 
+    # --- ৪. Menu (my go) ---
     if "mygo" in text_lower or "my go" in text_lower:
         data = get_json_data()
         if data:
