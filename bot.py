@@ -91,48 +91,57 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- ১. অ্যান্টি-স্ক্যাম এবং অ্যান্টি-লিংক সিস্টেম ---
     if chat_type in ['group', 'supergroup']:
-        should_delete = False
+        is_admin = False
         
-        # ক. ফরওয়ার্ড করা মেসেজ চেক
-        if message.forward_origin:
-            should_delete = True
+        # মেসেজ দাতা কি অ্যাডমিন তা চেক করা হচ্ছে
+        try:
+            user_id = message.from_user.id
+            chat_member = await context.bot.get_chat_member(chat_id=message.chat_id, user_id=user_id)
+            if chat_member.status in ['administrator', 'creator']:
+                is_admin = True
+        except Exception as e:
+            print("Admin check error:", e)
+
+        # যদি মেসেজ দাতা অ্যাডমিন "না" হয়, তবেই লিংক/স্ক্যাম চেক করবে
+        if not is_admin:
+            should_delete = False
             
-        # খ. স্ক্যাম কিওয়ার্ড চেক (যেমন: leaked, uncensored)
-        if any(spam_word in text_lower for spam_word in SPAM_KEYWORDS):
-            should_delete = True
+            # ক. ফরওয়ার্ড করা মেসেজ চেক
+            if message.forward_origin:
+                should_delete = True
+                
+            # খ. স্ক্যাম কিওয়ার্ড চেক
+            if any(spam_word in text_lower for spam_word in SPAM_KEYWORDS):
+                should_delete = True
 
-        # গ. হিডেন লিংক (Text Links) এবং সাধারণ লিংক চেক
-        if not should_delete:
-            urls_to_check = []
-            
-            # Entities থেকে লিংক বের করা (Hyperlinks)
-            entities = message.entities or message.caption_entities or []
-            for entity in entities:
-                if entity.type == MessageEntityType.TEXT_LINK:
-                    urls_to_check.append(entity.url)
-                elif entity.type == MessageEntityType.URL:
-                    if message.text:
-                        urls_to_check.append(message.text[entity.offset:entity.offset + entity.length])
-                    elif message.caption:
-                        urls_to_check.append(message.caption[entity.offset:entity.offset + entity.length])
+            # গ. হিডেন লিংক (Text Links) এবং সাধারণ লিংক চেক
+            if not should_delete:
+                urls_to_check = []
+                
+                entities = message.entities or message.caption_entities or []
+                for entity in entities:
+                    if entity.type == MessageEntityType.TEXT_LINK:
+                        urls_to_check.append(entity.url)
+                    elif entity.type == MessageEntityType.URL:
+                        if message.text:
+                            urls_to_check.append(message.text[entity.offset:entity.offset + entity.length])
+                        elif message.caption:
+                            urls_to_check.append(message.caption[entity.offset:entity.offset + entity.length])
 
-            # রেগুলার এক্সপ্রেশন দিয়ে সাধারণ লিংক বের করা
-            raw_links = re.findall(LINK_REGEX, text_to_check)
-            urls_to_check.extend(raw_links)
+                raw_links = re.findall(LINK_REGEX, text_to_check)
+                urls_to_check.extend(raw_links)
 
-            # সব লিংক যাচাই করা
-            for link in urls_to_check:
-                if not is_allowed_link(link):
-                    should_delete = True
-                    break
+                for link in urls_to_check:
+                    if not is_allowed_link(link):
+                        should_delete = True
+                        break
 
-        if should_delete:
-            try:
-                await message.delete()
-                # চাইলে স্ক্যামারকে কিক/ব্যান করার কোডও এখানে দেওয়া যায়
-            except Exception as e:
-                print("Delete Failed:", e)
-            return
+            if should_delete:
+                try:
+                    await message.delete()
+                except Exception as e:
+                    print("Delete Failed:", e)
+                return # মেসেজ ডিলিট হলে আর নিচের কমান্ডগুলো চেক করার দরকার নেই
 
     # --- ২. Earn YC কমান্ড ---
     if any(k in text_lower for k in EARN_KEYWORDS):
