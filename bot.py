@@ -24,8 +24,8 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@your_channel_username" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন
-ADMIN_CHAT_ID = 7477535984 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
+CHANNEL_USERNAME = "@your_channel_username" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন (যেমন: @MyTvChannel)
+ADMIN_CHAT_ID = 123456789 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 MENTION_REGEX = r"@[a-zA-Z0-9_]{5,32}" 
@@ -149,11 +149,12 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-    # --- ২. Earn YC কমান্ড ফিক্স ---
+    # --- ২. Earn YC কমান্ড ফিক্স (Mini App Link) ---
     if any(k in text_lower for k in EARN_KEYWORDS):
-        web_app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'my-free-agent.onrender.com')}/earn"
-        # এখানে web_app এর বদলে url ব্যবহার করা হয়েছে
-        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=web_app_url)]]
+        # BotFather থেকে পাওয়া আপনার মিনি অ্যাপের লিংকটি এখানে দেওয়া হলো
+        mini_app_link = "https://t.me/mytv_agent_bot/MYTV"
+        
+        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
