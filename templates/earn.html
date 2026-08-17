@@ -88,7 +88,6 @@
         #timer-text { font-size: 14px; color: var(--warning); margin-top: 12px; min-height: 40px; font-weight: 500;}
         .divider { margin: 20px 0; border: 0; height: 1px; background: #334155; }
         
-        /* Loading Screen */
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-color); z-index: 2000;
@@ -96,7 +95,6 @@
             font-size: 18px; color: var(--success); font-weight: bold;
         }
 
-        /* পপআপ মোডাল ডিজাইন */
         .modal {
             display: none; 
             position: fixed; 
@@ -169,11 +167,24 @@
     let balance = 0.0;
     let tasksLeft = 10;
     
+    // ডেইলি টাস্ক রিসেট লজিকের জন্য আজকের ডেট
+    let today = new Date().toDateString();
+    
     if (tg.CloudStorage) {
-        tg.CloudStorage.getItems(['yc_balance', 'tasks_left'], function(err, values) {
+        tg.CloudStorage.getItems(['yc_balance', 'tasks_left', 'last_date'], function(err, values) {
             if (!err) {
                 if (values['yc_balance']) balance = parseFloat(values['yc_balance']);
-                if (values['tasks_left']) tasksLeft = parseInt(values['tasks_left']);
+                
+                // নতুন দিনে টাস্ক ১০টা করে দেওয়া
+                if (values['last_date'] !== today) {
+                    tasksLeft = 10;
+                    tg.CloudStorage.setItem('last_date', today);
+                    tg.CloudStorage.setItem('tasks_left', "10");
+                } else if (values['tasks_left']) {
+                    tasksLeft = parseInt(values['tasks_left']);
+                }
+            } else {
+                tg.CloudStorage.setItem('last_date', today);
             }
             updateUI();
         });
@@ -290,13 +301,17 @@
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
             if (tg.initDataUnsafe.user.username) {
                 realUsername = tg.initDataUnsafe.user.username;
+            } else if (tg.initDataUnsafe.user.first_name) {
+                realUsername = tg.initDataUnsafe.user.first_name;
             }
             if (tg.initDataUnsafe.user.id) {
                 realUserId = tg.initDataUnsafe.user.id.toString();
             }
         }
 
-        fetch('/api/withdraw', {
+        let apiUrl = "https://my-free-agent.onrender.com/api/withdraw";
+
+        fetch(apiUrl, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -321,15 +336,14 @@
             tg.showAlert("✅ সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
             
             balance = 0;
-            tasksLeft = 10;
+            // উইথড্র করার পর টাস্ক যেন রিসেট না হয়, সেই লজিক সরানো হয়েছে
             
             if (tg.CloudStorage) {
                 tg.CloudStorage.setItem('yc_balance', "0.00");
-                tg.CloudStorage.setItem('tasks_left', "10");
+                // tasks_left আপডেট করা হচ্ছে না, যাতে আগের টাস্ক কাউন্ট ঠিক থাকে
             }
             
             document.getElementById('balance').innerText = "0.00";
-            document.getElementById('tasks-left').innerText = "10";
             document.getElementById('wallet-id').value = "";
             document.getElementById('timer-text').innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
             document.getElementById('timer-text').style.color = "var(--text-muted)";
