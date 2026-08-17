@@ -24,8 +24,8 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@your_channel_username" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন (যেমন: @MyTvChannel)
-ADMIN_CHAT_ID = 123456789 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
+CHANNEL_USERNAME = "@msmofworld" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন (যেমন: @MyTvChannel)
+ADMIN_CHAT_ID = 7477535984 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 MENTION_REGEX = r"@[a-zA-Z0-9_]{5,32}" 
