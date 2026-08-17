@@ -25,14 +25,13 @@ def run_web():
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
 CHANNEL_USERNAME = "@your_channel_username" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন
-ADMIN_CHAT_ID = 123456789 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
+ADMIN_CHAT_ID = 7477535984 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
-MENTION_REGEX = r"@[a-zA-Z0-9_]{5,32}" # টেলিগ্রাম ইউজারনেম রেজেক্স
+MENTION_REGEX = r"@[a-zA-Z0-9_]{5,32}" 
 ALLOWED_EXTENSIONS = [".m3u", ".mpd", ".m3u8"]
 ALLOWED_SITES = ["mytb.fun"]
 
-# স্ক্যাম এবং 18+ মেসেজ ধরার জন্য কিওয়ার্ড লিস্ট
 SPAM_KEYWORDS = [
     "caught on tape", "cheated on husband", "leaked", "vip vault", 
     "uncensored", "hot video", "private tape", "private link", 
@@ -90,55 +89,42 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_lower = text_to_check.lower()
     chat_type = message.chat.type
 
-    # --- ১. অ্যান্টি-স্ক্যাম, অ্যান্টি-লিংক এবং @username প্রটেকশন ---
     if chat_type in ['group', 'supergroup']:
         is_admin = False
-        
-        # মেসেজ দাতা কি অ্যাডমিন তা চেক করা হচ্ছে
         try:
             user_id = message.from_user.id
             chat_member = await context.bot.get_chat_member(chat_id=message.chat_id, user_id=user_id)
             if chat_member.status in ['administrator', 'creator']:
                 is_admin = True
-        except Exception as e:
-            print("Admin check error:", e)
+        except Exception:
+            pass
 
-        # যদি মেসেজ দাতা অ্যাডমিন "না" হয়, তবেই স্ক্যাম/লিংক/মেনশন চেক করবে
         if not is_admin:
             should_delete = False
             
-            # ক. ফরওয়ার্ড করা মেসেজ চেক
             if message.forward_origin:
                 should_delete = True
                 
-            # খ. স্ক্যাম কিওয়ার্ড চেক
             if any(spam_word in text_lower for spam_word in SPAM_KEYWORDS):
                 should_delete = True
 
-            # গ. @username মেনশন চেক (যদি গ্রুপের মেম্বার না হয়, তবে ডিলিট)
             if not should_delete:
                 mentions = re.findall(MENTION_REGEX, text_to_check)
                 for mention in mentions:
                     username_to_check = mention.replace("@", "")
-                    # নিজের চ্যানেলের ইউজারনেম হলে এলাউ করবে
                     if username_to_check.lower() == CHANNEL_USERNAME.replace("@", "").lower():
                         continue
-                        
                     try:
-                        # চেক করছে মেনশন করা ইউজারটি এই গ্রুপের মেম্বার কি না
                         mentioned_member = await context.bot.get_chat_member(chat_id=message.chat_id, user_id=f"@{username_to_check}")
                         if mentioned_member.status in ['left', 'kicked', 'restricted']:
                             should_delete = True
                             break
                     except Exception:
-                        # যদি ইউজারকে গ্রুপে না পাওয়া যায় (যেমন: অন্য চ্যানেল বা বাইরের কেউ), তবে ডিলিট করবে
                         should_delete = True
                         break
 
-            # ঘ. হিডেন লিংক (Text Links) এবং সাধারণ লিংক চেক
             if not should_delete:
                 urls_to_check = []
-                
                 entities = message.entities or message.caption_entities or []
                 for entity in entities:
                     if entity.type == MessageEntityType.TEXT_LINK:
@@ -148,7 +134,6 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             urls_to_check.append(message.text[entity.offset:entity.offset + entity.length])
                         elif message.caption:
                             urls_to_check.append(message.caption[entity.offset:entity.offset + entity.length])
-
                 raw_links = re.findall(LINK_REGEX, text_to_check)
                 urls_to_check.extend(raw_links)
 
@@ -160,19 +145,18 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if should_delete:
                 try:
                     await message.delete()
-                except Exception as e:
-                    print("Delete Failed:", e)
-                return # মেসেজ ডিলিট হলে আর নিচের কমান্ডগুলো চেক করার দরকার নেই
+                except Exception:
+                    pass
+                return
 
-    # --- ২. Earn YC কমান্ড ---
-    # এখানে 'earn yc', 'yc earn' ইত্যাদি যেকোনো ফরমেটে লিখলেই কাজ করবে
+    # --- ২. Earn YC কমান্ড ফিক্স ---
     if any(k in text_lower for k in EARN_KEYWORDS):
         web_app_url = f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'my-free-agent.onrender.com')}/earn"
-        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", web_app=WebAppInfo(url=web_app_url))]]
+        # এখানে web_app এর বদলে url ব্যবহার করা হয়েছে
+        keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=web_app_url)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
-    # --- ৩. MY Recharge নিয়ম ---
     if any(k in text_lower for k in RECHARGE_KEYWORDS):
         recharge_text = (
             "💎 *MY TV-তে YC রিচার্জ করার নিয়ম*\n\n"
@@ -184,7 +168,6 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(recharge_text, parse_mode='Markdown')
         return
 
-    # --- ৪. Menu (my go) ---
     if "mygo" in text_lower or "my go" in text_lower:
         data = get_json_data()
         if data:
