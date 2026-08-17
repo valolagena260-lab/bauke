@@ -3,6 +3,7 @@ import threading
 import asyncio
 import re
 import requests
+import json
 from flask import Flask, render_template, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -195,6 +196,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("চেক করা সম্ভব হয়নি।", show_alert=True)
         return
 
+    # --- অ্যাডমিন অ্যাপ্রুভ করলে গ্রুপে মেসেজ যাওয়ার লজিক (ইউজারনেম ফিক্স) ---
     if data.startswith("apv_"):
         parts = data.split("_")
         if len(parts) >= 4:
@@ -202,12 +204,20 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = parts[2]
             wallet_id = "_".join(parts[3:]) 
             
-            await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
-            await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড\n👤 User ID: `{user_id}`\n💳 Wallet: `{wallet_id}`\n💰 Amount: {amount} YC", parse_mode='Markdown')
+            # অ্যাডমিনের মেসেজ থেকে আসল ইউজারনেম বের করা হচ্ছে
+            real_username = "মেম্বার"
+            if query.message and query.message.text:
+                match = re.search(r"👤 ইউজার:\s*@?([^\s\(]+)", query.message.text)
+                if match:
+                    real_username = match.group(1)
             
+            await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
+            await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড\n👤 User: @{real_username}\n💳 Wallet: `{wallet_id}`\n💰 Amount: {amount} YC", parse_mode='Markdown')
+            
+            # গ্রুপে মেসেজ পাঠানোর সময় আসল নাম ব্যবহার করা হচ্ছে
             success_msg = (
                 f"🎉 **উইথড্র সাকসেসফুল!**\n\n"
-                f"👤 ইউজার: [মেম্বার](tg://user?id={user_id})\n"
+                f"👤 ইউজার: [{real_username}](tg://user?id={user_id})\n"
                 f"💳 ওয়ালেট আইডি: `{wallet_id}`\n"
                 f"💰 পরিমাণ: **{amount} YC**\n\n"
                 f"✅ আপনার ওয়ালেটে ব্যালেন্স সফলভাবে অ্যাড করা হয়েছে!"
@@ -241,15 +251,18 @@ def api_withdraw():
         if len(callback_data) > 64:
             callback_data = callback_data[:64]
             
-        # FIX: InlineKeyboardButton অবজেক্টের বদলে সরাসরি ডিকশনারি (Dictionary) দেওয়া হলো
-        keyboard = [[{"text": "✅ Approve", "callback_data": callback_data}]]
+        keyboard = {
+            "inline_keyboard": [
+                [{"text": "✅ Approve", "callback_data": callback_data}]
+            ]
+        }
         
         try:
             requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={
                 "chat_id": ADMIN_CHAT_ID,
                 "text": f"🔔 **নতুন উইথড্র রিকোয়েস্ট!**\n\n👤 ইউজার: @{telegram_user} (ID: `{user_id}`)\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
                 "parse_mode": "Markdown",
-                "reply_markup": {"inline_keyboard": keyboard}
+                "reply_markup": keyboard
             }, timeout=5)
         except Exception as e:
             print("Failed to send admin message:", e)
