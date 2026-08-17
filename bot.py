@@ -25,9 +25,8 @@ def run_web():
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
 
-# --- আপনার দেওয়া ইনফরমেশন ---
 CHANNEL_USERNAME = "@msmofworld" 
-GROUP_CHAT_ID = -1002190441261 # <-- আপনার দেওয়া গ্রুপের আইডিটি এখানে বসানো হয়েছে
+GROUP_CHAT_ID = -1002190441261 
 ADMIN_CHAT_ID = 7477535984 
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
@@ -46,7 +45,7 @@ EARN_KEYWORDS = ["earn yc", "earnyc", "yc earn", "ycearn"]
 
 def get_json_data():
     try:
-        response = requests.get(JSON_URL)
+        response = requests.get(JSON_URL, timeout=5)
         return response.json()
     except:
         return None
@@ -153,7 +152,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     if any(k in text_lower for k in EARN_KEYWORDS):
-        mini_app_link = "https://t.me/mytv_agent_bot/MYTV"
+        mini_app_link = "https://t.me/mytv_agent_bot/myapp"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
@@ -196,7 +195,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("চেক করা সম্ভব হয়নি।", show_alert=True)
         return
 
-    # --- অ্যাডমিন অ্যাপ্রুভ করলে গ্রুপে মেসেজ যাওয়ার লজিক ---
     if data.startswith("apv_"):
         parts = data.split("_")
         if len(parts) >= 4:
@@ -245,12 +243,15 @@ def api_withdraw():
             
         keyboard = [[InlineKeyboardButton("✅ Approve", callback_data=callback_data)]]
         
-        requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={
-            "chat_id": ADMIN_CHAT_ID,
-            "text": f"🔔 **নতুন উইথড্র রিকোয়েস্ট!**\n\n👤 ইউজার: @{telegram_user} (ID: `{user_id}`)\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
-            "parse_mode": "Markdown",
-            "reply_markup": {"inline_keyboard": keyboard}
-        })
+        try:
+            requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={
+                "chat_id": ADMIN_CHAT_ID,
+                "text": f"🔔 **নতুন উইথড্র রিকোয়েস্ট!**\n\n👤 ইউজার: @{telegram_user} (ID: `{user_id}`)\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
+                "parse_mode": "Markdown",
+                "reply_markup": {"inline_keyboard": keyboard}
+            }, timeout=5)
+        except Exception as e:
+            print("Failed to send admin message:", e)
 
     return jsonify({"status": "success", "message": "Withdraw request sent!"})
 
