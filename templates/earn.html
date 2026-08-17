@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MY TV - YC Earn & Withdraw</title>
+    <!-- টেলিগ্রাম WebApp SDK যুক্ত করা হলো -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -85,6 +87,14 @@
         }
         #timer-text { font-size: 14px; color: var(--warning); margin-top: 12px; min-height: 40px; font-weight: 500;}
         .divider { margin: 20px 0; border: 0; height: 1px; background: #334155; }
+        
+        /* Loading Screen */
+        #loading-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-color); z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; color: var(--success); font-weight: bold;
+        }
 
         /* পপআপ মোডাল ডিজাইন */
         .modal {
@@ -110,7 +120,9 @@
 </head>
 <body>
 
-<div class="container">
+<div id="loading-screen">ডেটা লোড হচ্ছে, অপেক্ষা করুন...</div>
+
+<div class="container" id="main-app" style="display: none;">
     <div class="card">
         <h2>🎯 MY TV YC Task</h2>
         
@@ -137,25 +149,42 @@
         <h3 style="font-size: 16px; margin-bottom: 5px; text-align: left;">💳 উইথড্র (Withdraw)</h3>
         <p style="font-size: 12px; color: var(--text-muted); text-align: left; margin-top: 0;">মিনিমাম ১ YC হলেই উইথড্র করতে পারবেন।</p>
         <input type="text" id="wallet-id" placeholder="MY TV Wallet ID দিন">
-        <button style="background: var(--success); margin-top: 12px;" onclick="requestWithdraw()">উইথড্র রিকোয়েস্ট পাঠান</button>
+        <button style="background: var(--success); margin-top: 12px;" id="withdraw-btn" onclick="requestWithdraw()">উইথড্র রিকোয়েস্ট পাঠান</button>
     </div>
 </div>
 
 <!-- কাস্টম পপআপ মোডাল -->
 <div id="adModal" class="modal">
     <div class="modal-content">
-        <p>বিজ্ঞাপনটি নতুন ট্যাবে ওপেন হবে। দয়া করে <b>বিজ্ঞাপনের পেজে ১৫ সেকেন্ড অপেক্ষা করুন</b>। আগে ফিরে আসলে টাস্ক বাতিল হবে!</p>
+        <p>বিজ্ঞাপনটি ওপেন হবে। দয়া করে <b>বিজ্ঞাপনের পেজে ১৫ সেকেন্ড অপেক্ষা করুন</b>। আগে ফিরে আসলে টাস্ক বাতিল হবে!</p>
         <button style="background: var(--success);" onclick="startTimerAndOpenAd()">বিজ্ঞাপন ওপেন করুন</button>
         <button style="background: #64748b; margin-top: 10px;" onclick="closeModal()">বাতিল</button>
     </div>
 </div>
 
 <script>
-    let balance = parseFloat(localStorage.getItem('yc_balance')) || 0.0;
-    let tasksLeft = localStorage.getItem('tasks_left') !== null ? parseInt(localStorage.getItem('tasks_left')) : 10;
+    // টেলিগ্রাম WebApp Initialize
+    let tg = window.Telegram.WebApp;
+    tg.expand(); // ফুলস্ক্রিন করা
+
+    let balance = 0.0;
+    let tasksLeft = 10;
     
-    document.getElementById('balance').innerText = balance.toFixed(2);
-    document.getElementById('tasks-left').innerText = tasksLeft;
+    // টেলিগ্রাম ক্লাউড স্টোরেজ থেকে ডেটা লোড করা
+    tg.CloudStorage.getItems(['yc_balance', 'tasks_left'], function(err, values) {
+        if (!err) {
+            if (values['yc_balance']) balance = parseFloat(values['yc_balance']);
+            if (values['tasks_left']) tasksLeft = parseInt(values['tasks_left']);
+        }
+        
+        // UI আপডেট করা
+        document.getElementById('balance').innerText = balance.toFixed(2);
+        document.getElementById('tasks-left').innerText = tasksLeft;
+        
+        // লোডিং স্ক্রিন সরিয়ে মেইন অ্যাপ দেখানো
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('main-app').style.display = 'block';
+    });
 
     let ad = document.createElement('div');
     ad.innerHTML = '&nbsp;';
@@ -175,7 +204,7 @@
 
     function openAdModal() {
         if (tasksLeft <= 0) {
-            alert("আজকের টাস্ক শেষ! কাল আবার চেষ্টা করুন।");
+            tg.showAlert("আজকের টাস্ক শেষ! কাল আবার চেষ্টা করুন।");
             return;
         }
         document.getElementById('adModal').style.display = 'flex';
@@ -193,88 +222,108 @@
         btn.disabled = true;
         
         // আপনার অ্যাডস্টাররা ডাইরেক্ট লিংক এখানে দিন
-        let adUrl = "https://your-adsterra-direct-link.com"; 
+        let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; 
         
-        // বর্তমান সময় সেভ করে রাখা হচ্ছে
         adStartTime = Date.now();
         waitingForUserReturn = true;
         
         timerText.style.color = "var(--warning)";
-        timerText.innerText = "⏳ আপনি এখন বিজ্ঞাপনের পেজে আছেন। দয়া করে সেখানে ১৫ সেকেন্ড অপেক্ষা করুন। আগে ফিরে আসলে টাস্ক বাতিল হবে!";
+        timerText.innerText = "⏳ আপনি এখন বিজ্ঞাপনের পেজে আছেন। দয়া করে সেখানে ১৫ সেকেন্ড অপেক্ষা করুন।";
 
-        // বিজ্ঞাপন ওপেন করা
-        window.open(adUrl, "_blank");
+        // টেলিগ্রামের মাধ্যমে লিংক ওপেন করা
+        tg.openLink(adUrl);
     }
 
-    // ইউজার যখন আগের পেজে (মিনি অ্যাপে) ফিরে আসবে, তখন এটি ট্রিগার হবে
+    // ইউজার যখন আগের পেজে ফিরে আসবে
     function handleVisibilityChange() {
         if (document.visibilityState === 'visible' && waitingForUserReturn) {
             let timerText = document.getElementById('timer-text');
             let btn = document.getElementById('task-btn');
             
-            // কতক্ষণ বাইরে ছিল তা হিসাব করা হচ্ছে
             let timeSpentAway = (Date.now() - adStartTime) / 1000;
-            
-            waitingForUserReturn = false; // চেক করা শেষ
+            waitingForUserReturn = false; 
 
             if (timeSpentAway >= REQUIRED_TIME_SECONDS) {
-                // ইউজার সততার সাথে ১৫ সেকেন্ড পার করেছে
                 balance += 0.10;
                 tasksLeft--;
                 
-                localStorage.setItem('yc_balance', balance.toFixed(2));
-                localStorage.setItem('tasks_left', tasksLeft);
+                // ক্লাউড স্টোরেজে সেভ করা (কখনো ডিলিট হবে না)
+                tg.CloudStorage.setItem('yc_balance', balance.toFixed(2));
+                tg.CloudStorage.setItem('tasks_left', tasksLeft.toString());
 
                 document.getElementById('balance').innerText = balance.toFixed(2);
                 document.getElementById('tasks-left').innerText = tasksLeft;
                 
                 timerText.style.color = "var(--success)";
-                timerText.innerText = `🎉 অভিনন্দন! আপনি সফলভাবে বিজ্ঞাপন দেখেছেন। ০.১০ YC যোগ হয়েছে।`;
+                timerText.innerText = `🎉 অভিনন্দন! ০.১০ YC যোগ হয়েছে।`;
+                tg.HapticFeedback.notificationOccurred("success");
             } else {
-                // ইউজার চিটিং করেছে (আগে ফিরে এসেছে)
                 let timeMissed = Math.ceil(REQUIRED_TIME_SECONDS - timeSpentAway);
                 timerText.style.color = "var(--danger)";
-                timerText.innerText = `⚠️ টাস্ক বাতিল! আপনি ${timeMissed} সেকেন্ড আগেই ফিরে এসেছেন। আপনাকে বিজ্ঞাপনের পেজে পুরো ১৫ সেকেন্ড থাকতে হবে।`;
+                timerText.innerText = `⚠️ টাস্ক বাতিল! আপনি ${timeMissed} সেকেন্ড আগেই ফিরে এসেছেন।`;
+                tg.HapticFeedback.notificationOccurred("error");
             }
             
             btn.disabled = false;
         }
     }
 
-    // ব্রাউজারের ফোকাস বা ভিজিবিলিটি চেঞ্জ ধরবে
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleVisibilityChange);
 
     function requestWithdraw() {
         let walletId = document.getElementById('wallet-id').value.trim();
         if (!walletId) {
-            alert("দয়া করে আপনার MY TV Wallet ID দিন!");
+            tg.showAlert("দয়া করে আপনার MY TV Wallet ID দিন!");
             return;
         }
         if (balance < 1) {
-            alert("উইথড্র করার জন্য কমপক্ষে ১ YC প্রয়োজন!");
+            tg.showAlert("উইথড্র করার জন্য কমপক্ষে ১ YC প্রয়োজন!");
             return;
         }
+
+        let withdrawBtn = document.getElementById('withdraw-btn');
+        withdrawBtn.disabled = true;
+        withdrawBtn.innerText = "রিকোয়েস্ট পাঠানো হচ্ছে...";
+
+        // ইউজারের আসল নাম এবং আইডি টেলিগ্রাম থেকে নেওয়া
+        let realUsername = tg.initDataUnsafe?.user?.username || "UnknownUser";
+        let realUserId = tg.initDataUnsafe?.user?.id || "0";
 
         fetch('/api/withdraw', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ wallet_id: walletId, amount: balance, username: "TelegramUser", user_id: "12345" })
+            body: JSON.stringify({ 
+                wallet_id: walletId, 
+                amount: balance, 
+                username: realUsername, 
+                user_id: realUserId 
+            })
         })
         .then(res => res.json())
         .then(data => {
-            alert("সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
+            tg.showAlert("✅ সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
+            
             balance = 0;
-            localStorage.setItem('yc_balance', 0);
-            localStorage.setItem('tasks_left', 10);
+            tasksLeft = 10;
+            
+            // ক্লাউড স্টোরেজ রিসেট করা
+            tg.CloudStorage.setItem('yc_balance', "0.00");
+            tg.CloudStorage.setItem('tasks_left', "10");
+            
             document.getElementById('balance').innerText = "0.00";
             document.getElementById('tasks-left').innerText = "10";
             document.getElementById('wallet-id').value = "";
             document.getElementById('timer-text').innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
             document.getElementById('timer-text').style.color = "var(--text-muted)";
+            
+            withdrawBtn.disabled = false;
+            withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
         })
         .catch(err => {
-            alert("সমস্যা হয়েছে, আবার চেষ্টা করুন।");
+            tg.showAlert("⚠️ সমস্যা হয়েছে, নেটওয়ার্ক চেক করে আবার চেষ্টা করুন।");
+            withdrawBtn.disabled = false;
+            withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
         });
     }
 </script>
