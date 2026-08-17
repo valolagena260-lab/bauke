@@ -163,28 +163,30 @@
 </div>
 
 <script>
-    // টেলিগ্রাম WebApp Initialize
     let tg = window.Telegram.WebApp;
-    tg.expand(); // ফুলস্ক্রিন করা
+    tg.expand();
 
     let balance = 0.0;
     let tasksLeft = 10;
     
-    // টেলিগ্রাম ক্লাউড স্টোরেজ থেকে ডেটা লোড করা
-    tg.CloudStorage.getItems(['yc_balance', 'tasks_left'], function(err, values) {
-        if (!err) {
-            if (values['yc_balance']) balance = parseFloat(values['yc_balance']);
-            if (values['tasks_left']) tasksLeft = parseInt(values['tasks_left']);
-        }
-        
-        // UI আপডেট করা
+    if (tg.CloudStorage) {
+        tg.CloudStorage.getItems(['yc_balance', 'tasks_left'], function(err, values) {
+            if (!err) {
+                if (values['yc_balance']) balance = parseFloat(values['yc_balance']);
+                if (values['tasks_left']) tasksLeft = parseInt(values['tasks_left']);
+            }
+            updateUI();
+        });
+    } else {
+        updateUI(); 
+    }
+
+    function updateUI() {
         document.getElementById('balance').innerText = balance.toFixed(2);
         document.getElementById('tasks-left').innerText = tasksLeft;
-        
-        // লোডিং স্ক্রিন সরিয়ে মেইন অ্যাপ দেখানো
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-app').style.display = 'block';
-    });
+    }
 
     let ad = document.createElement('div');
     ad.innerHTML = '&nbsp;';
@@ -220,9 +222,7 @@
         let timerText = document.getElementById('timer-text');
         
         btn.disabled = true;
-        
-        // আপনার অ্যাডস্টাররা ডাইরেক্ট লিংক এখানে দিন
-        let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; 
+        let adUrl = "https://your-adsterra-direct-link.com"; 
         
         adStartTime = Date.now();
         waitingForUserReturn = true;
@@ -230,11 +230,9 @@
         timerText.style.color = "var(--warning)";
         timerText.innerText = "⏳ আপনি এখন বিজ্ঞাপনের পেজে আছেন। দয়া করে সেখানে ১৫ সেকেন্ড অপেক্ষা করুন।";
 
-        // টেলিগ্রামের মাধ্যমে লিংক ওপেন করা
         tg.openLink(adUrl);
     }
 
-    // ইউজার যখন আগের পেজে ফিরে আসবে
     function handleVisibilityChange() {
         if (document.visibilityState === 'visible' && waitingForUserReturn) {
             let timerText = document.getElementById('timer-text');
@@ -247,21 +245,22 @@
                 balance += 0.10;
                 tasksLeft--;
                 
-                // ক্লাউড স্টোরেজে সেভ করা (কখনো ডিলিট হবে না)
-                tg.CloudStorage.setItem('yc_balance', balance.toFixed(2));
-                tg.CloudStorage.setItem('tasks_left', tasksLeft.toString());
+                if (tg.CloudStorage) {
+                    tg.CloudStorage.setItem('yc_balance', balance.toFixed(2));
+                    tg.CloudStorage.setItem('tasks_left', tasksLeft.toString());
+                }
 
                 document.getElementById('balance').innerText = balance.toFixed(2);
                 document.getElementById('tasks-left').innerText = tasksLeft;
                 
                 timerText.style.color = "var(--success)";
                 timerText.innerText = `🎉 অভিনন্দন! ০.১০ YC যোগ হয়েছে।`;
-                tg.HapticFeedback.notificationOccurred("success");
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             } else {
                 let timeMissed = Math.ceil(REQUIRED_TIME_SECONDS - timeSpentAway);
                 timerText.style.color = "var(--danger)";
                 timerText.innerText = `⚠️ টাস্ক বাতিল! আপনি ${timeMissed} সেকেন্ড আগেই ফিরে এসেছেন।`;
-                tg.HapticFeedback.notificationOccurred("error");
+                if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
             }
             
             btn.disabled = false;
@@ -286,14 +285,18 @@
         withdrawBtn.disabled = true;
         withdrawBtn.innerText = "রিকোয়েস্ট পাঠানো হচ্ছে...";
 
-        // ইউজারের আসল নাম এবং আইডি টেলিগ্রাম থেকে নেওয়া
-        let realUsername = tg.initDataUnsafe?.user?.username || "UnknownUser";
-        let realUserId = tg.initDataUnsafe?.user?.id || "0";
+        let realUsername = "UnknownUser";
+        let realUserId = "0";
+        if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+            if (tg.initDataUnsafe.user.username) {
+                realUsername = tg.initDataUnsafe.user.username;
+            }
+            if (tg.initDataUnsafe.user.id) {
+                realUserId = tg.initDataUnsafe.user.id.toString();
+            }
+        }
 
-        // এখানে সরাসরি Render-এর ফুল লিংক দেওয়া হলো যাতে কোনো পাথ সমস্যা না হয়
-        let apiUrl = "https://my-free-agent.onrender.com/api/withdraw";
-
-        fetch(apiUrl, {
+        fetch('/api/withdraw', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -306,22 +309,24 @@
                 user_id: realUserId 
             })
         })
-        .then(async res => {
+        .then(function(res) {
             if (!res.ok) {
-                let errText = await res.text();
-                throw new Error("Server Error: " + res.status + " " + errText);
+                return res.text().then(function(errText) {
+                    throw new Error("Server Error: " + res.status);
+                });
             }
             return res.json();
         })
-        .then(data => {
+        .then(function(data) {
             tg.showAlert("✅ সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
             
             balance = 0;
             tasksLeft = 10;
             
-            // ক্লাউড স্টোরেজ রিসেট করা
-            tg.CloudStorage.setItem('yc_balance', "0.00");
-            tg.CloudStorage.setItem('tasks_left', "10");
+            if (tg.CloudStorage) {
+                tg.CloudStorage.setItem('yc_balance', "0.00");
+                tg.CloudStorage.setItem('tasks_left', "10");
+            }
             
             document.getElementById('balance').innerText = "0.00";
             document.getElementById('tasks-left').innerText = "10";
@@ -332,8 +337,7 @@
             withdrawBtn.disabled = false;
             withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
         })
-        .catch(err => {
-            // এখন আর শুধু "নেটওয়ার্ক চেক করুন" বলবে না, ঠিক কী সমস্যা হয়েছে তা স্ক্রিনে দেখাবে
+        .catch(function(err) {
             tg.showAlert("⚠️ সমস্যা হয়েছে: " + err.message);
             withdrawBtn.disabled = false;
             withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
