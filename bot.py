@@ -24,8 +24,11 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
-CHANNEL_USERNAME = "@msmofworld" # <-- এখানে আপনার চ্যানেলের ইউজারনেম দিন (যেমন: @MyTvChannel)
-ADMIN_CHAT_ID = 7477535984 # <-- এখানে আপনার নিজের (অ্যাডমিনের) টেলিগ্রাম আইডি বসাবেন
+
+# --- আপনার দেওয়া ইনফরমেশন ---
+CHANNEL_USERNAME = "@msmofworld" 
+GROUP_CHAT_ID = -1002190441261 # <-- আপনার দেওয়া গ্রুপের আইডিটি এখানে বসানো হয়েছে
+ADMIN_CHAT_ID = 7477535984 
 
 LINK_REGEX = r"(https?://\S+|www\.\S+|t\.me/\S+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/\S*)?)"
 MENTION_REGEX = r"@[a-zA-Z0-9_]{5,32}" 
@@ -149,11 +152,8 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-    # --- ২. Earn YC কমান্ড ফিক্স (Mini App Link) ---
     if any(k in text_lower for k in EARN_KEYWORDS):
-        # BotFather থেকে পাওয়া আপনার মিনি অ্যাপের লিংকটি এখানে দেওয়া হলো
-        mini_app_link = "https://t.me/mytv_agent_bot/MYTV"
-        
+        mini_app_link = "https://t.me/mytv_agent_bot/myapp"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
@@ -196,14 +196,28 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("চেক করা সম্ভব হয়নি।", show_alert=True)
         return
 
-    if data.startswith("approve_withdraw_"):
+    # --- অ্যাডমিন অ্যাপ্রুভ করলে গ্রুপে মেসেজ যাওয়ার লজিক ---
+    if data.startswith("apv_"):
         parts = data.split("_")
-        user_id = parts[2]
-        amount = parts[3]
-        username = parts[4] if len(parts) > 4 else "User"
-        
-        await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
-        await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড (AMT: {amount} YC, User: @{username})")
+        if len(parts) >= 4:
+            user_id = parts[1]
+            amount = parts[2]
+            wallet_id = "_".join(parts[3:]) 
+            
+            await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
+            await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড\n👤 User ID: `{user_id}`\n💳 Wallet: `{wallet_id}`\n💰 Amount: {amount} YC", parse_mode='Markdown')
+            
+            success_msg = (
+                f"🎉 **উইথড্র সাকসেসফুল!**\n\n"
+                f"👤 ইউজার: [মেম্বার](tg://user?id={user_id})\n"
+                f"💳 ওয়ালেট আইডি: `{wallet_id}`\n"
+                f"💰 পরিমাণ: **{amount} YC**\n\n"
+                f"✅ আপনার ওয়ালেটে ব্যালেন্স সফলভাবে অ্যাড করা হয়েছে!"
+            )
+            try:
+                await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=success_msg, parse_mode='Markdown')
+            except Exception as e:
+                print(f"Error sending group message: {e}")
         return
 
     await query.answer()
@@ -225,10 +239,15 @@ def api_withdraw():
     user_id = req_data.get('user_id', '0')
 
     if ADMIN_CHAT_ID:
-        keyboard = [[InlineKeyboardButton("✅ Approve", callback_data=f"approve_withdraw_{user_id}_{amount}_{telegram_user}")]]
+        callback_data = f"apv_{user_id}_{amount}_{wallet_id}"
+        if len(callback_data) > 64:
+            callback_data = callback_data[:64]
+            
+        keyboard = [[InlineKeyboardButton("✅ Approve", callback_data=callback_data)]]
+        
         requests.post(f"https://api.telegram.org/bot{TOKEN}/sendMessage", json={
             "chat_id": ADMIN_CHAT_ID,
-            "text": f"🔔 নতুন উইথড্র রিকোয়েস্ট!\n\n👤 ইউজার: @{telegram_user}\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
+            "text": f"🔔 **নতুন উইথড্র রিকোয়েস্ট!**\n\n👤 ইউজার: @{telegram_user} (ID: `{user_id}`)\n💳 ওয়ালেট আইডি: `{wallet_id}`\n💵 পরিমাণ: {amount} YC",
             "parse_mode": "Markdown",
             "reply_markup": {"inline_keyboard": keyboard}
         })
