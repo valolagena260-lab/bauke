@@ -290,9 +290,15 @@
         let realUsername = tg.initDataUnsafe?.user?.username || "UnknownUser";
         let realUserId = tg.initDataUnsafe?.user?.id || "0";
 
-        fetch('/api/withdraw', {
+        // এখানে সরাসরি Render-এর ফুল লিংক দেওয়া হলো যাতে কোনো পাথ সমস্যা না হয়
+        let apiUrl = "https://my-free-agent.onrender.com/api/withdraw";
+
+        fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ 
                 wallet_id: walletId, 
                 amount: balance, 
@@ -300,7 +306,13 @@
                 user_id: realUserId 
             })
         })
-        .then(res => res.json())
+        .then(async res => {
+            if (!res.ok) {
+                let errText = await res.text();
+                throw new Error("Server Error: " + res.status + " " + errText);
+            }
+            return res.json();
+        })
         .then(data => {
             tg.showAlert("✅ সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
             
@@ -321,7 +333,8 @@
             withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
         })
         .catch(err => {
-            tg.showAlert("⚠️ সমস্যা হয়েছে, নেটওয়ার্ক চেক করে আবার চেষ্টা করুন।");
+            // এখন আর শুধু "নেটওয়ার্ক চেক করুন" বলবে না, ঠিক কী সমস্যা হয়েছে তা স্ক্রিনে দেখাবে
+            tg.showAlert("⚠️ সমস্যা হয়েছে: " + err.message);
             withdrawBtn.disabled = false;
             withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
         });
