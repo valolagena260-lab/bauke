@@ -153,7 +153,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     if any(k in text_lower for k in EARN_KEYWORDS):
-        mini_app_link = "https://t.me/mytv_agent_bot/myapp"
+        mini_app_link = "https://t.me/mytv_agent_bot/MYTV"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
