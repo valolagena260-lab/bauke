@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MY TV - YC Earn & Withdraw</title>
-    <!-- টেলিগ্রাম WebApp SDK যুক্ত করা হলো -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
     <style>
         :root {
             --bg-color: #0f172a;
@@ -151,7 +151,6 @@
     </div>
 </div>
 
-<!-- কাস্টম পপআপ মোডাল -->
 <div id="adModal" class="modal">
     <div class="modal-content">
         <p>বিজ্ঞাপনটি ওপেন হবে। দয়া করে <b>বিজ্ঞাপনের পেজে ১৫ সেকেন্ড অপেক্ষা করুন</b>। আগে ফিরে আসলে টাস্ক বাতিল হবে!</p>
@@ -166,30 +165,103 @@
 
     let balance = 0.0;
     let tasksLeft = 10;
-    
-    // ডেইলি টাস্ক রিসেট লজিকের জন্য আজকের ডেট
     let today = new Date().toDateString();
-    
-    if (tg.CloudStorage) {
-        tg.CloudStorage.getItems(['yc_balance', 'tasks_left', 'last_date'], function(err, values) {
-            if (!err) {
-                if (values['yc_balance']) balance = parseFloat(values['yc_balance']);
-                
-                // নতুন দিনে টাস্ক ১০টা করে দেওয়া
-                if (values['last_date'] !== today) {
-                    tasksLeft = 10;
-                    tg.CloudStorage.setItem('last_date', today);
-                    tg.CloudStorage.setItem('tasks_left', "10");
-                } else if (values['tasks_left']) {
-                    tasksLeft = parseInt(values['tasks_left']);
-                }
-            } else {
-                tg.CloudStorage.setItem('last_date', today);
-            }
-            updateUI();
+
+    function saveData() {
+        let dataToSave = JSON.stringify({
+            yc_balance: balance,
+            tasks_left: tasksLeft,
+            last_date: today
         });
-    } else {
-        updateUI(); 
+        
+        localStorage.setItem('my_tv_user_data', dataToSave);
+        
+        if (tg.CloudStorage) {
+            tg.CloudStorage.setItem('my_tv_user_data', dataToSave, function(err, saved) {
+                if(err) console.error("Cloud save error:", err);
+            });
+        }
+    }
+
+    function loadData() {
+        if (tg.CloudStorage) {
+            tg.CloudStorage.getItem('my_tv_user_data', function(err, val) {
+                if (!err && val) {
+                    parseAndSetData(val);
+                } else {
+                    let localVal = localStorage.getItem('my_tv_user_data');
+                    if (localVal) parseAndSetData(localVal);
+                    else initNewData();
+                }
+            });
+        } else {
+            let localVal = localStorage.getItem('my_tv_user_data');
+            if (localVal) parseAndSetData(localVal);
+            else initNewData();
+        }
+    }
+
+    function parseAndSetData(jsonString) {
+        try {
+            let data = JSON.parse(jsonString);
+            balance = parseFloat(data.yc_balance) || 0.0;
+            
+            if (data.last_date !== today) {
+                tasksLeft = 10;
+                saveData(); 
+            } else {
+                tasksLeft = parseInt(data.tasks_left);
+                if(isNaN(tasksLeft)) tasksLeft = 10;
+            }
+        } catch(e) {
+            initNewData();
+        }
+        updateUI();
+    }
+
+    function initNewData() {
+        balance = 0.0;
+        tasksLeft = 10;
+        saveData();
+        updateUI();
+    }
+
+    let nextDayInterval;
+    function startNextDayCountdown() {
+        let timerText = document.getElementById('timer-text');
+        if (nextDayInterval) clearInterval(nextDayInterval);
+        
+        function updateTimer() {
+            let now = new Date();
+            let midnight = new Date(now);
+            midnight.setHours(24, 0, 0, 0); // রাত ১২টার সময় সেট করা হলো
+            let distance = midnight.getTime() - now.getTime();
+            
+            // যদি রাত ১২টা বেজে যায়
+            if (distance <= 0) {
+                clearInterval(nextDayInterval);
+                tasksLeft = 10; // নতুন টাস্ক আনলক
+                today = new Date().toDateString();
+                saveData();
+                updateUI();
+                return;
+            }
+            
+            let hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            let minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            let seconds = Math.floor((distance % (1000 * 60)) / 1000);
+            
+            // 01:05:09 এই ফরম্যাটে দেখানোর জন্য
+            hours = hours < 10 ? "0" + hours : hours;
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+            
+            timerText.innerHTML = `🛑 <b>আজকের টাস্ক শেষ!</b><br><br>⏳ নতুন টাস্ক আনলক হবে:<br><b style="font-size:22px; color: #10b981; letter-spacing: 2px;">${hours}:${minutes}:${seconds}</b> পর`;
+            timerText.style.color = "var(--text-muted)";
+        }
+        
+        updateTimer(); 
+        nextDayInterval = setInterval(updateTimer, 1000);
     }
 
     function updateUI() {
@@ -197,7 +269,26 @@
         document.getElementById('tasks-left').innerText = tasksLeft;
         document.getElementById('loading-screen').style.display = 'none';
         document.getElementById('main-app').style.display = 'block';
+        
+        let taskBtn = document.getElementById('task-btn');
+        let timerText = document.getElementById('timer-text');
+        
+        if (tasksLeft <= 0) {
+            taskBtn.style.display = 'none'; // টাস্ক শেষ হলে বাটন হাইড
+            startNextDayCountdown(); // কাউন্টডাউন শুরু
+        } else {
+            taskBtn.style.display = 'block'; // বাটন শো
+            taskBtn.disabled = false;
+            if (nextDayInterval) clearInterval(nextDayInterval);
+            
+            if (!waitingForUserReturn && !timerText.innerText.includes("অভিনন্দন")) {
+                timerText.innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
+                timerText.style.color = "var(--warning)";
+            }
+        }
     }
+
+    loadData();
 
     let ad = document.createElement('div');
     ad.innerHTML = '&nbsp;';
@@ -233,7 +324,7 @@
         let timerText = document.getElementById('timer-text');
         
         btn.disabled = true;
-        let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; 
+        let adUrl = "https://www.effectivecpmnetwork.com/q45emcu9s?key=47cdb5711119cee95fdb490cd5c91b3c"; // <-- আপনার অ্যাডস্টাররা লিংক দিন
         
         adStartTime = Date.now();
         waitingForUserReturn = true;
@@ -256,25 +347,26 @@
                 balance += 0.10;
                 tasksLeft--;
                 
-                if (tg.CloudStorage) {
-                    tg.CloudStorage.setItem('yc_balance', balance.toFixed(2));
-                    tg.CloudStorage.setItem('tasks_left', tasksLeft.toString());
-                }
+                saveData();
 
-                document.getElementById('balance').innerText = balance.toFixed(2);
-                document.getElementById('tasks-left').innerText = tasksLeft;
+                if (tasksLeft <= 0) {
+                    updateUI(); // টাস্ক জিরো হলে অটোমেটিক টাইমার শুরু হবে
+                } else {
+                    document.getElementById('balance').innerText = balance.toFixed(2);
+                    document.getElementById('tasks-left').innerText = tasksLeft;
+                    timerText.style.color = "var(--success)";
+                    timerText.innerText = `🎉 অভিনন্দন! ০.১০ YC যোগ হয়েছে।`;
+                    btn.disabled = false;
+                }
                 
-                timerText.style.color = "var(--success)";
-                timerText.innerText = `🎉 অভিনন্দন! ০.১০ YC যোগ হয়েছে।`;
                 if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
             } else {
                 let timeMissed = Math.ceil(REQUIRED_TIME_SECONDS - timeSpentAway);
                 timerText.style.color = "var(--danger)";
                 timerText.innerText = `⚠️ টাস্ক বাতিল! আপনি ${timeMissed} সেকেন্ড আগেই ফিরে এসেছেন।`;
+                btn.disabled = false;
                 if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred("error");
             }
-            
-            btn.disabled = false;
         }
     }
 
@@ -301,8 +393,6 @@
         if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
             if (tg.initDataUnsafe.user.username) {
                 realUsername = tg.initDataUnsafe.user.username;
-            } else if (tg.initDataUnsafe.user.first_name) {
-                realUsername = tg.initDataUnsafe.user.first_name;
             }
             if (tg.initDataUnsafe.user.id) {
                 realUserId = tg.initDataUnsafe.user.id.toString();
@@ -335,18 +425,17 @@
         .then(function(data) {
             tg.showAlert("✅ সফলভাবে উইথড্র রিকোয়েস্ট পাঠানো হয়েছে! অ্যাডমিন চেক করে পেমেন্ট পাঠিয়ে দেবেন।");
             
-            balance = 0;
-            // উইথড্র করার পর টাস্ক যেন রিসেট না হয়, সেই লজিক সরানো হয়েছে
-            
-            if (tg.CloudStorage) {
-                tg.CloudStorage.setItem('yc_balance', "0.00");
-                // tasks_left আপডেট করা হচ্ছে না, যাতে আগের টাস্ক কাউন্ট ঠিক থাকে
-            }
+            balance = 0.0;
+            saveData();
             
             document.getElementById('balance').innerText = "0.00";
             document.getElementById('wallet-id').value = "";
-            document.getElementById('timer-text').innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
-            document.getElementById('timer-text').style.color = "var(--text-muted)";
+            
+            // টাস্ক যদি জিরো থাকে, তাহলে কাউন্টডাউন চলতেই থাকবে। আর না থাকলে নরমাল টেক্সট।
+            if (tasksLeft > 0) {
+                document.getElementById('timer-text').innerText = "১৫ সেকেন্ড বিজ্ঞাপন দেখে টাস্ক কমপ্লিট করুন";
+                document.getElementById('timer-text').style.color = "var(--text-muted)";
+            }
             
             withdrawBtn.disabled = false;
             withdrawBtn.innerText = "উইথড্র রিকোয়েস্ট পাঠান";
