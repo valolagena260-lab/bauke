@@ -3,7 +3,6 @@ import threading
 import asyncio
 import re
 import requests
-import json
 from flask import Flask, render_template, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
@@ -94,13 +93,18 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if chat_type in ['group', 'supergroup']:
         is_admin = False
-        try:
-            user_id = message.from_user.id
-            chat_member = await context.bot.get_chat_member(chat_id=message.chat_id, user_id=user_id)
-            if chat_member.status in ['administrator', 'creator']:
-                is_admin = True
-        except Exception:
-            pass
+        
+        # --- ফিক্স: চ্যানেল থেকে আসা পোস্ট বা অ্যানোনিমাস অ্যাডমিনের পোস্ট হলে ডিলিট করবে না ---
+        if message.sender_chat or message.is_automatic_forward:
+            is_admin = True
+        else:
+            try:
+                user_id = message.from_user.id
+                chat_member = await context.bot.get_chat_member(chat_id=message.chat_id, user_id=user_id)
+                if chat_member.status in ['administrator', 'creator']:
+                    is_admin = True
+            except Exception:
+                pass
 
         if not is_admin:
             should_delete = False
@@ -153,7 +157,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
     if any(k in text_lower for k in EARN_KEYWORDS):
-        mini_app_link = "https://t.me/mytv_agent_bot/MYTV"
+        mini_app_link = "https://t.me/mytv_agent_bot/myapp"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
@@ -196,7 +200,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("চেক করা সম্ভব হয়নি।", show_alert=True)
         return
 
-    # --- অ্যাডমিন অ্যাপ্রুভ করলে গ্রুপে মেসেজ যাওয়ার লজিক (ইউজারনেম ফিক্স) ---
     if data.startswith("apv_"):
         parts = data.split("_")
         if len(parts) >= 4:
@@ -204,7 +207,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = parts[2]
             wallet_id = "_".join(parts[3:]) 
             
-            # অ্যাডমিনের মেসেজ থেকে আসল ইউজারনেম বের করা হচ্ছে
+            # আসল ইউজারনেম বের করার লজিক (অ্যাডমিন মেসেজ থেকে)
             real_username = "মেম্বার"
             if query.message and query.message.text:
                 match = re.search(r"👤 ইউজার:\s*@?([^\s\(]+)", query.message.text)
