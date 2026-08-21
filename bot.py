@@ -26,6 +26,7 @@ def run_web():
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
 PKG_API_URL = "https://mspannel.top/apis/mytv_pkg_api.php"
+PROFILE_API_URL = "https://mspannel.top/apis/mytv_profile_api.php" # নতুন প্রোফাইল API যুক্ত করা হলো
 
 CHANNEL_USERNAME = "@msmofworld" 
 GROUP_CHAT_ID = -1002190441261 
@@ -45,10 +46,11 @@ SPAM_KEYWORDS = [
 RECHARGE_KEYWORDS = ["my recharge", "add yc", "myrecharge", "addyc"]
 EARN_KEYWORDS = ["earn yc", "earnyc", "yc earn", "ycearn"]
 PLAN_KEYWORDS = ["my plan", "myplan", "packages", "pkg", "my pkg"]
+PROFILE_KEYWORDS = ["my profile", "my account", "myprofile", "myaccount", "my wallet"] # প্রোফাইলের কি-ওয়ার্ড
 
 def get_json_data():
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(JSON_URL, headers=headers, timeout=5)
         return response.json()
     except:
@@ -56,7 +58,7 @@ def get_json_data():
 
 def get_pkg_data():
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(PKG_API_URL, headers=headers, timeout=5)
         if response.status_code == 200:
             return response.json()
@@ -95,40 +97,18 @@ def get_pkg_data():
             "price": 550,
             "screen": 2,
             "sell_bonus": 17
-        },
-        {
-            "auto_renew_default": True,
-            "cashback_percent": 100,
-            "description": "Billed every 6 months",
-            "duration_months": 6,
-            "features": ["Remove Ads", "Watch on 3 Screens", "Smart TV Access"],
-            "gift_months": 1,
-            "id": "pkg_monthly_6",
-            "name": "6 Months Plan",
-            "offer_badge_type": "popular",
-            "offer_end_date": "2026-08-30T23:59:00+06:00",
-            "offer_start_date": "2025-11-09T00:00:00+06:00",
-            "price": 1200,
-            "screen": 3,
-            "sell_bonus": 35
-        },
-        {
-            "auto_renew_default": True,
-            "cashback_percent": 200,
-            "description": "Billed annually",
-            "duration_months": 12,
-            "features": ["Remove Ads", "Watch on 4 Screens", "Smart TV Access"],
-            "gift_months": 2,
-            "id": "pkg_monthly_12",
-            "name": "12 Months Plan (Annual)",
-            "offer_badge_type": "fire",
-            "offer_end_date": "2026-08-30T23:59:00+06:00",
-            "offer_start_date": "2025-11-09T00:00:00+06:00",
-            "price": 2400,
-            "screen": 4,
-            "sell_bonus": 75
         }
     ]
+
+def get_profile_data():
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(PROFILE_API_URL, headers=headers, timeout=5)
+        if response.status_code == 200:
+            return response.json()
+    except:
+        pass
+    return None
 
 def is_allowed_link(link: str) -> bool:
     if not link:
@@ -171,6 +151,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_lower = text_to_check.lower()
     chat_type = message.chat.type
 
+    # --- স্প্যাম প্রোটেকশন লজিক ---
     if chat_type in ['group', 'supergroup']:
         is_admin = False
         if message.sender_chat or message.is_automatic_forward:
@@ -234,13 +215,58 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
+    # --- প্রোফাইল চেক লজিক (Wallet ID রিসিভ করা) ---
+    if context.user_data.get('awaiting_wallet_id'):
+        text_stripped = text_to_check.strip()
+        # যদি ইউজার ১০ অক্ষরের কিছু দেয়
+        if len(text_stripped) == 10 and text_stripped.isalnum():
+            wallet_id_input = text_stripped.upper()
+            context.user_data['awaiting_wallet_id'] = False # স্টেট রিসেট
+            
+            profiles = get_profile_data()
+            if profiles:
+                found_profile = None
+                # JSON এর UID গুলোর প্রথম ১০ অক্ষর মিলিয়ে দেখা
+                for uid, data in profiles.items():
+                    if uid.upper().startswith(wallet_id_input):
+                        found_profile = data
+                        break
+                
+                if found_profile:
+                    name = found_profile.get("name", "Unknown")
+                    balance = found_profile.get("balance", 0)
+                    is_premium = found_profile.get("premium", False)
+                    premium_until = found_profile.get("premiumUntil", "")
+                    
+                    status_text = "👑 Premium" if is_premium else "🆓 Free Account"
+                    if is_premium and premium_until:
+                        status_text += f" (Valid till: {premium_until})"
+                        
+                    msg = (
+                        f"👤 **MY TV Profile Details**\n\n"
+                        f"📛 **Name:** {name}\n"
+                        f"💰 **Balance:** {balance} YC\n"
+                        f"✨ **Status:** {status_text}"
+                    )
+                    await message.reply_text(msg, parse_mode='Markdown')
+                else:
+                    await message.reply_text("⚠️ এই Wallet ID দিয়ে কোনো প্রোফাইল পাওয়া যায়নি। দয়া করে সঠিক ID দিন।")
+            else:
+                await message.reply_text("⚠️ সার্ভার থেকে ডেটা লোড করা যায়নি, পরে আবার চেষ্টা করুন।")
+            return
+
+    # --- Profile কমান্ড ---
+    if any(k in text_lower for k in PROFILE_KEYWORDS):
+        context.user_data['awaiting_wallet_id'] = True
+        await message.reply_text("👤 **প্রোফাইল চেক করতে:**\n\nদয়া করে আপনার MY TV Wallet ID দিন (UID এর প্রথম ১০ অক্ষর):")
+        return
+
     # --- MY Plan (Packages) ---
     if any(k in text_lower for k in PLAN_KEYWORDS):
         pkgs = get_pkg_data()
         if pkgs:
             keyboard = []
             for p in pkgs:
-                # এখানে plan_ প্রিফিক্স দেওয়া হলো বাগ ফিক্স করার জন্য
                 keyboard.append([InlineKeyboardButton(f"⭐ {p['name']}", callback_data=f"plan_{p['id']}")])
             
             await message.reply_text(
@@ -283,10 +309,9 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
 
-    # --- প্যাকেজ বাটন ক্লিক হ্যান্ডলার (বাগ ফিক্সড) ---
+    # --- প্যাকেজ বাটন ক্লিক হ্যান্ডলার ---
     if data.startswith("plan_"):
-        # এখন শুধু plan_ মুছবে, আসল আইডি কাটবে না
-        pkg_id = data.replace("plan_", "", 1)
+        pkg_id = data.replace("plan_", "")
         pkgs = get_pkg_data()
         
         if not pkgs:
@@ -311,7 +336,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg_text += f"📝 **Details:** {desc}\n\n"
         msg_text += f"✨ **Features:**\n{features_text}\n\n"
 
-        # অফার চেক করার লজিক
         try:
             start_date_str = selected_pkg.get('offer_start_date')
             end_date_str = selected_pkg.get('offer_end_date')
