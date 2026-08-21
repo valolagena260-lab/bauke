@@ -258,7 +258,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Profile কমান্ড ---
     if any(k in text_lower for k in PROFILE_KEYWORDS):
         context.user_data['awaiting_wallet_id'] = True
-        await message.reply_text("👤 **প্রোফাইল চেক করতে:**\n\nদয়া করে আপনার MY TV Wallet ID দিন (UID এর প্রথম ১০ অক্ষর):")
+        await message.reply_text("👤 **প্রোফাইল চেক করতে:**\n\nদয়া করে আপনার MY TV Wallet ID দিন:")
         return
 
     # --- MY Plan (Packages) ---
