@@ -7,6 +7,7 @@ from flask import Flask, render_template, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from telegram.constants import MessageEntityType
+from datetime import datetime
 
 web_app = Flask(__name__)
 
@@ -24,6 +25,7 @@ def run_web():
 
 TOKEN = os.environ.get("BOT_TOKEN")
 JSON_URL = "https://raw.githubusercontent.com/valolagena260-lab/bauke/refs/heads/main/data.json"
+PKG_API_URL = "https://mspannel.top/apis/mytv_pkg_api.php"
 
 CHANNEL_USERNAME = "@msmofworld" 
 GROUP_CHAT_ID = -1002190441261 
@@ -42,10 +44,18 @@ SPAM_KEYWORDS = [
 
 RECHARGE_KEYWORDS = ["my recharge", "add yc", "myrecharge", "addyc"]
 EARN_KEYWORDS = ["earn yc", "earnyc", "yc earn", "ycearn"]
+PLAN_KEYWORDS = ["my plan", "myplan", "packages", "pkg"]
 
 def get_json_data():
     try:
         response = requests.get(JSON_URL, timeout=5)
+        return response.json()
+    except:
+        return None
+
+def get_pkg_data():
+    try:
+        response = requests.get(PKG_API_URL, timeout=5)
         return response.json()
     except:
         return None
@@ -91,10 +101,10 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_lower = text_to_check.lower()
     chat_type = message.chat.type
 
+    # গ্রুপ স্প্যাম প্রোটেকশন (অ্যাডমিন বা চ্যানেলের পোস্ট ডিলিট হবে না)
     if chat_type in ['group', 'supergroup']:
         is_admin = False
         
-        # --- ফিক্স: চ্যানেল থেকে আসা পোস্ট বা অ্যানোনিমাস অ্যাডমিনের পোস্ট হলে ডিলিট করবে না ---
         if message.sender_chat or message.is_automatic_forward:
             is_admin = True
         else:
@@ -156,12 +166,31 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
+    # --- MY Plan (Packages) লজিক ---
+    if any(k in text_lower for k in PLAN_KEYWORDS):
+        pkgs = get_pkg_data()
+        if pkgs:
+            keyboard = []
+            for p in pkgs:
+                keyboard.append([InlineKeyboardButton(f"⭐ {p['name']}", callback_data=f"pkg_{p['id']}")])
+            
+            await message.reply_text(
+                "📺 **MY TV প্যাকেজ সমূহ:**\n\nপ্ল্যানগুলোর বিস্তারিত জানতে ও অফার চেক করতে যেকোনো একটি বাটনে ক্লিক করুন👇", 
+                reply_markup=InlineKeyboardMarkup(keyboard), 
+                parse_mode='Markdown'
+            )
+        else:
+            await message.reply_text("⚠️ বর্তমানে প্যাকেজ সার্ভারটি ডাউন আছে, পরে আবার চেষ্টা করুন।")
+        return
+
+    # --- Earn YC ---
     if any(k in text_lower for k in EARN_KEYWORDS):
         mini_app_link = "https://t.me/mytv_agent_bot/myapp"
         keyboard = [[InlineKeyboardButton("🚀 YC আর্নিং অ্যাপ ওপেন করুন", url=mini_app_link)]]
         await message.reply_text("💰 **YC আর্নিং সিস্টেম:**\n\nপ্রতিদিন টাস্ক কমপ্লিট করে YC আয় করুন। শুরু করতে নিচের বাটনে ক্লিক করুন:", reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
 
+    # --- Recharge ---
     if any(k in text_lower for k in RECHARGE_KEYWORDS):
         recharge_text = (
             "💎 *MY TV-তে YC রিচার্জ করার নিয়ম*\n\n"
@@ -173,6 +202,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await message.reply_text(recharge_text, parse_mode='Markdown')
         return
 
+    # --- MyGo Menus ---
     if "mygo" in text_lower or "my go" in text_lower:
         data = get_json_data()
         if data:
@@ -183,6 +213,68 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
+
+    # --- প্যাকেজ বাটন ক্লিক হ্যান্ডলার ---
+    if data.startswith("pkg_"):
+        pkg_id = data.replace("pkg_", "")
+        pkgs = get_pkg_data()
+        
+        if not pkgs:
+            await query.answer("সার্ভার থেকে ডেটা লোড করা যায়নি!", show_alert=True)
+            return
+
+        selected_pkg = next((p for p in pkgs if p['id'] == pkg_id), None)
+        if not selected_pkg:
+            await query.answer("প্যাকেজটি পাওয়া যায়নি!", show_alert=True)
+            return
+
+        name = selected_pkg.get('name', 'Unknown Plan')
+        price = selected_pkg.get('price', 0)
+        desc = selected_pkg.get('description', '')
+        screens = selected_pkg.get('screen', 1)
+        features_list = selected_pkg.get('features', [])
+        features_text = "\n".join([f"✅ {f}" for f in features_list])
+        
+        msg_text = f"💳 **{name}**\n\n"
+        msg_text += f"💰 **Price:** {price} BDT\n"
+        msg_text += f"📱 **Screens:** {screens} Device(s)\n"
+        msg_text += f"📝 **Details:** {desc}\n\n"
+        msg_text += f"✨ **Features:**\n{features_text}\n\n"
+
+        # অফার চেক করার লজিক
+        try:
+            start_date_str = selected_pkg.get('offer_start_date')
+            end_date_str = selected_pkg.get('offer_end_date')
+            
+            if start_date_str and end_date_str:
+                start_dt = datetime.fromisoformat(start_date_str)
+                end_dt = datetime.fromisoformat(end_date_str)
+                now = datetime.now(end_dt.tzinfo) # বর্তমান সময় অফারের টাইমজোনে
+                
+                if start_dt <= now <= end_dt:
+                    time_left = end_dt - now
+                    days = time_left.days
+                    hours, _ = divmod(time_left.seconds, 3600)
+                    
+                    cashback = selected_pkg.get('cashback_percent', 0)
+                    gift = selected_pkg.get('gift_months', 0)
+                    
+                    msg_text += "🎁 **--- স্পেশাল অফার ---** 🎁\n"
+                    if cashback > 0:
+                        msg_text += f"💸 **Cashback:** {cashback} Taka\n"
+                    if gift > 0:
+                        msg_text += f"🎉 **Extra Gift:** {gift} Month(s) Free!\n"
+                    
+                    msg_text += f"⏳ **Offer Ends In:** {days} দিন {hours} ঘণ্টা\n"
+                elif now > end_dt:
+                    msg_text += "⚠️ *এই প্যাকেজের স্পেশাল অফারটি শেষ হয়ে গেছে।*\n"
+        except Exception as e:
+            pass # ডেট ফরম্যাটে সমস্যা থাকলে অফার অংশটি স্কিপ করবে
+
+        # বাটন রিমুভ করে ইনফরমেশন দেখানো
+        await query.answer()
+        await query.edit_message_text(text=msg_text, parse_mode='Markdown', reply_markup=None)
+        return
 
     if data.startswith("check_join_"):
         target_id = int(data.split("_")[2])
@@ -207,7 +299,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount = parts[2]
             wallet_id = "_".join(parts[3:]) 
             
-            # আসল ইউজারনেম বের করার লজিক (অ্যাডমিন মেসেজ থেকে)
             real_username = "মেম্বার"
             if query.message and query.message.text:
                 match = re.search(r"👤 ইউজার:\s*@?([^\s\(]+)", query.message.text)
@@ -217,7 +308,6 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.answer("উইথড্র সফলভাবে অ্যাপ্রুভ করা হয়েছে!")
             await query.edit_message_text(f"✅ উইথড্র অ্যাপ্রুভড\n👤 User: @{real_username}\n💳 Wallet: `{wallet_id}`\n💰 Amount: {amount} YC", parse_mode='Markdown')
             
-            # গ্রুপে মেসেজ পাঠানোর সময় আসল নাম ব্যবহার করা হচ্ছে
             success_msg = (
                 f"🎉 **উইথড্র সাকসেসফুল!**\n\n"
                 f"👤 ইউজার: [{real_username}](tg://user?id={user_id})\n"
