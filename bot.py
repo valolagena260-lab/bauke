@@ -55,7 +55,6 @@ def get_json_data():
         return None
 
 def get_pkg_data():
-    # প্রথমে API থেকে লাইভ ডেটা আনার চেষ্টা করবে
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         response = requests.get(PKG_API_URL, headers=headers, timeout=5)
@@ -64,7 +63,6 @@ def get_pkg_data():
     except:
         pass
     
-    # API ফেইল করলে বা সার্ভার ডাউন থাকলে এই ব্যাকআপ (Fallback) ডেটা ব্যবহার করবে
     return [
         {
             "auto_renew_default": True,
@@ -242,7 +240,8 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if pkgs:
             keyboard = []
             for p in pkgs:
-                keyboard.append([InlineKeyboardButton(f"⭐ {p['name']}", callback_data=f"pkg_{p['id']}")])
+                # এখানে plan_ প্রিফিক্স দেওয়া হলো বাগ ফিক্স করার জন্য
+                keyboard.append([InlineKeyboardButton(f"⭐ {p['name']}", callback_data=f"plan_{p['id']}")])
             
             await message.reply_text(
                 "📺 **MY TV প্যাকেজ সমূহ:**\n\nপ্ল্যানগুলোর বিস্তারিত জানতে ও অফার চেক করতে যেকোনো একটি বাটনে ক্লিক করুন👇", 
@@ -284,9 +283,10 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
 
-    # --- প্যাকেজ বাটন ক্লিক হ্যান্ডলার ---
-    if data.startswith("pkg_"):
-        pkg_id = data.replace("pkg_", "")
+    # --- প্যাকেজ বাটন ক্লিক হ্যান্ডলার (বাগ ফিক্সড) ---
+    if data.startswith("plan_"):
+        # এখন শুধু plan_ মুছবে, আসল আইডি কাটবে না
+        pkg_id = data.replace("plan_", "", 1)
         pkgs = get_pkg_data()
         
         if not pkgs:
