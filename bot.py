@@ -44,21 +44,93 @@ SPAM_KEYWORDS = [
 
 RECHARGE_KEYWORDS = ["my recharge", "add yc", "myrecharge", "addyc"]
 EARN_KEYWORDS = ["earn yc", "earnyc", "yc earn", "ycearn"]
-PLAN_KEYWORDS = ["my plan", "myplan", "packages", "pkg"]
+PLAN_KEYWORDS = ["my plan", "myplan", "packages", "pkg", "my pkg"]
 
 def get_json_data():
     try:
-        response = requests.get(JSON_URL, timeout=5)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        response = requests.get(JSON_URL, headers=headers, timeout=5)
         return response.json()
     except:
         return None
 
 def get_pkg_data():
+    # প্রথমে API থেকে লাইভ ডেটা আনার চেষ্টা করবে
     try:
-        response = requests.get(PKG_API_URL, timeout=5)
-        return response.json()
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+        response = requests.get(PKG_API_URL, headers=headers, timeout=5)
+        if response.status_code == 200:
+            return response.json()
     except:
-        return None
+        pass
+    
+    # API ফেইল করলে বা সার্ভার ডাউন থাকলে এই ব্যাকআপ (Fallback) ডেটা ব্যবহার করবে
+    return [
+        {
+            "auto_renew_default": True,
+            "cashback_percent": 15,
+            "description": "Billed every month",
+            "duration_months": 1,
+            "features": ["Remove Ads", "Watch on 2 Screens", "Smart TV Access"],
+            "gift_months": 0,
+            "id": "pkg_monthly_1",
+            "name": "1 Month Plan",
+            "offer_badge_type": "fredflix",
+            "offer_end_date": "2026-05-30T23:59:00+06:00",
+            "offer_start_date": "2025-11-09T00:00:00+06:00",
+            "price": 200,
+            "screen": 2,
+            "sell_bonus": 5
+        },
+        {
+            "auto_renew_default": True,
+            "cashback_percent": 50,
+            "description": "Billed every 3 months",
+            "duration_months": 3,
+            "features": ["Remove Ads", "Watch on 2 Screens", "Smart TV Access"],
+            "gift_months": 0,
+            "id": "pkg_monthly_3",
+            "name": "3 Months Plan",
+            "offer_badge_type": "saver",
+            "offer_end_date": "2026-08-30T23:59:00+06:00",
+            "offer_start_date": "2025-11-09T00:00:00+06:00",
+            "price": 550,
+            "screen": 2,
+            "sell_bonus": 17
+        },
+        {
+            "auto_renew_default": True,
+            "cashback_percent": 100,
+            "description": "Billed every 6 months",
+            "duration_months": 6,
+            "features": ["Remove Ads", "Watch on 3 Screens", "Smart TV Access"],
+            "gift_months": 1,
+            "id": "pkg_monthly_6",
+            "name": "6 Months Plan",
+            "offer_badge_type": "popular",
+            "offer_end_date": "2026-08-30T23:59:00+06:00",
+            "offer_start_date": "2025-11-09T00:00:00+06:00",
+            "price": 1200,
+            "screen": 3,
+            "sell_bonus": 35
+        },
+        {
+            "auto_renew_default": True,
+            "cashback_percent": 200,
+            "description": "Billed annually",
+            "duration_months": 12,
+            "features": ["Remove Ads", "Watch on 4 Screens", "Smart TV Access"],
+            "gift_months": 2,
+            "id": "pkg_monthly_12",
+            "name": "12 Months Plan (Annual)",
+            "offer_badge_type": "fire",
+            "offer_end_date": "2026-08-30T23:59:00+06:00",
+            "offer_start_date": "2025-11-09T00:00:00+06:00",
+            "price": 2400,
+            "screen": 4,
+            "sell_bonus": 75
+        }
+    ]
 
 def is_allowed_link(link: str) -> bool:
     if not link:
@@ -101,10 +173,8 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text_lower = text_to_check.lower()
     chat_type = message.chat.type
 
-    # গ্রুপ স্প্যাম প্রোটেকশন (অ্যাডমিন বা চ্যানেলের পোস্ট ডিলিট হবে না)
     if chat_type in ['group', 'supergroup']:
         is_admin = False
-        
         if message.sender_chat or message.is_automatic_forward:
             is_admin = True
         else:
@@ -166,7 +236,7 @@ async def check_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-    # --- MY Plan (Packages) লজিক ---
+    # --- MY Plan (Packages) ---
     if any(k in text_lower for k in PLAN_KEYWORDS):
         pkgs = get_pkg_data()
         if pkgs:
@@ -220,7 +290,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pkgs = get_pkg_data()
         
         if not pkgs:
-            await query.answer("সার্ভার থেকে ডেটা লোড করা যায়নি!", show_alert=True)
+            await query.answer("ডেটা লোড করা যায়নি!", show_alert=True)
             return
 
         selected_pkg = next((p for p in pkgs if p['id'] == pkg_id), None)
@@ -249,7 +319,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if start_date_str and end_date_str:
                 start_dt = datetime.fromisoformat(start_date_str)
                 end_dt = datetime.fromisoformat(end_date_str)
-                now = datetime.now(end_dt.tzinfo) # বর্তমান সময় অফারের টাইমজোনে
+                now = datetime.now(end_dt.tzinfo)
                 
                 if start_dt <= now <= end_dt:
                     time_left = end_dt - now
@@ -269,9 +339,8 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 elif now > end_dt:
                     msg_text += "⚠️ *এই প্যাকেজের স্পেশাল অফারটি শেষ হয়ে গেছে।*\n"
         except Exception as e:
-            pass # ডেট ফরম্যাটে সমস্যা থাকলে অফার অংশটি স্কিপ করবে
+            pass 
 
-        # বাটন রিমুভ করে ইনফরমেশন দেখানো
         await query.answer()
         await query.edit_message_text(text=msg_text, parse_mode='Markdown', reply_markup=None)
         return
